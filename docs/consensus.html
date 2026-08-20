@@ -1,0 +1,454 @@
+<title>鑑定卡儀表板共識書</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+
+<style>
+:root{
+  --paper:#F4F6F9;
+  --surface:#FFFFFF;
+  --surface-2:#EDF1F5;
+  --ink:#15181F;
+  --ink-2:#5A6472;
+  --ink-3:#8A94A3;
+  --line:#DBE1E9;
+  --line-strong:#C3CCD8;
+  --accent:#C8102E;
+  --accent-soft:rgba(200,16,46,.09);
+  --gain:#0B7A4B;
+  --warn:#9A6206;
+  --shadow:0 1px 2px rgba(21,24,31,.05), 0 8px 24px -16px rgba(21,24,31,.24);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1219;
+    --surface:#161B24;
+    --surface-2:#1D232E;
+    --ink:#E7ECF3;
+    --ink-2:#94A0B0;
+    --ink-3:#6C7787;
+    --line:#252C38;
+    --line-strong:#333C4B;
+    --accent:#FF5468;
+    --accent-soft:rgba(255,84,104,.13);
+    --gain:#3ECF8E;
+    --warn:#E0A526;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1219;
+  --surface:#161B24;
+  --surface-2:#1D232E;
+  --ink:#E7ECF3;
+  --ink-2:#94A0B0;
+  --ink-3:#6C7787;
+  --line:#252C38;
+  --line-strong:#333C4B;
+  --accent:#FF5468;
+  --accent-soft:rgba(255,84,104,.13);
+  --gain:#3ECF8E;
+  --warn:#E0A526;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Noto Sans TC","Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px;
+  line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:56rem;margin:0 auto;padding:clamp(2rem,5vw,4.5rem) clamp(1.1rem,4vw,2rem) 6rem}
+
+/* ---------- masthead ---------- */
+.mast{border-top:3px solid var(--accent);padding-top:1.6rem;margin-bottom:3.2rem}
+.mast .kicker{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);margin:0 0 .9rem
+}
+h1{
+  font-family:"Archivo","Noto Sans TC",sans-serif;
+  font-weight:700;font-size:clamp(2rem,5.5vw,2.9rem);line-height:1.12;
+  letter-spacing:-.02em;margin:0 0 .7rem;text-wrap:balance
+}
+.dek{font-size:1.06rem;color:var(--ink-2);margin:0;max-width:44ch;text-wrap:pretty}
+
+.meta{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));
+  gap:1px;background:var(--line);border:1px solid var(--line);
+  margin-top:2rem;border-radius:3px;overflow:hidden
+}
+.meta div{background:var(--surface);padding:.85rem 1rem}
+.meta dt{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.66rem;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 .3rem
+}
+.meta dd{
+  margin:0;font-family:"Archivo",sans-serif;font-weight:600;font-size:1.18rem;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em
+}
+
+/* ---------- sections ---------- */
+section{margin-top:3.4rem}
+.sec-head{display:flex;align-items:baseline;gap:.9rem;border-bottom:1px solid var(--line-strong);padding-bottom:.55rem;margin-bottom:1.5rem}
+.sec-head .no{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.72rem;
+  color:var(--accent);letter-spacing:.1em;flex:none
+}
+h2{
+  font-family:"Archivo","Noto Sans TC",sans-serif;font-weight:700;
+  font-size:1.32rem;letter-spacing:-.01em;margin:0;text-wrap:balance
+}
+h3{
+  font-family:"Archivo","Noto Sans TC",sans-serif;font-weight:600;
+  font-size:1.02rem;margin:2rem 0 .6rem;letter-spacing:-.005em
+}
+p{margin:0 0 1rem;max-width:66ch;text-wrap:pretty}
+strong{font-weight:700}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.86em}
+code{background:var(--surface-2);padding:.12em .38em;border-radius:3px}
+a{color:var(--accent)}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+
+/* ---------- scope columns ---------- */
+.scope{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1rem}
+.scope > div{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1.1rem 1.2rem;box-shadow:var(--shadow)}
+.scope h4{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:500;
+  font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;margin:0 0 .8rem
+}
+.scope .in h4{color:var(--gain)}
+.scope .out h4{color:var(--ink-3)}
+.scope ul{margin:0;padding-left:1.1rem;font-size:.95rem;color:var(--ink-2)}
+.scope li{margin-bottom:.35rem}
+.scope li::marker{color:var(--line-strong)}
+
+/* ---------- glossary ---------- */
+.gloss{border-left:2px solid var(--accent);padding-left:1.1rem;margin:1.4rem 0}
+.gloss dt{font-weight:700;margin-top:1rem;font-size:1rem}
+.gloss dt:first-child{margin-top:0}
+.gloss dd{margin:.15rem 0 0;color:var(--ink-2);font-size:.95rem;max-width:62ch}
+.gloss .avoid{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
+  color:var(--ink-3);display:block;margin-top:.2rem
+}
+
+/* ---------- pipeline ---------- */
+.pipe{display:flex;flex-wrap:wrap;align-items:stretch;gap:.5rem;margin:1.4rem 0}
+.pipe .step{
+  flex:1 1 8.5rem;background:var(--surface);border:1px solid var(--line);
+  border-top:2px solid var(--accent);border-radius:3px;padding:.8rem .9rem;box-shadow:var(--shadow)
+}
+.pipe .step .n{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.66rem;
+  letter-spacing:.1em;color:var(--ink-3);display:block;margin-bottom:.3rem
+}
+.pipe .step .t{font-weight:700;font-size:.94rem;display:block;line-height:1.4}
+.pipe .step .d{font-size:.82rem;color:var(--ink-2);display:block;margin-top:.25rem;line-height:1.5}
+
+/* ---------- screen spec ---------- */
+.screen{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:1.3rem;margin:1.2rem 0;box-shadow:var(--shadow)}
+.screen > .zone{border:1px dashed var(--line-strong);border-radius:3px;padding:.9rem 1rem;margin-bottom:.8rem;background:var(--surface-2)}
+.screen > .zone:last-child{margin-bottom:0}
+.zone .zlabel{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.66rem;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:.5rem
+}
+.zone ul{margin:0;padding-left:1.1rem;font-size:.9rem;color:var(--ink-2)}
+.zone li{margin-bottom:.3rem}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(6.2rem,1fr));gap:.55rem;margin-top:.7rem}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:.5rem;text-align:center}
+.tile .img{aspect-ratio:5/7;background:linear-gradient(160deg,var(--surface-2),var(--line));border-radius:2px;margin-bottom:.4rem}
+.tile .nm{font-size:.72rem;display:block;line-height:1.3;color:var(--ink-2)}
+.tile .pct{font-family:"Archivo",sans-serif;font-weight:600;font-size:.8rem;font-variant-numeric:tabular-nums}
+.tile .up{color:var(--gain)}
+.tile .dn{color:var(--accent)}
+
+/* ---------- ledger ---------- */
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--surface);box-shadow:var(--shadow);margin:1.2rem 0}
+table{border-collapse:collapse;width:100%;min-width:34rem;font-size:.9rem}
+caption{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.68rem;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);
+  text-align:left;padding:.85rem 1rem .5rem
+}
+th,td{padding:.6rem 1rem;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:500;
+  font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);border-bottom:1px solid var(--line-strong);white-space:nowrap
+}
+tbody tr:last-child td{border-bottom:none}
+td.id{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-weight:500;
+  color:var(--accent);white-space:nowrap;font-variant-numeric:tabular-nums
+}
+td.dec{font-weight:700;white-space:nowrap}
+td.why{color:var(--ink-2);font-size:.86rem}
+tr.round-head td{
+  background:var(--surface-2);font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-2);
+  padding:.5rem 1rem;font-weight:500
+}
+
+/* ---------- facts ---------- */
+.facts{display:grid;gap:.6rem;margin:1.2rem 0}
+.fact{display:grid;grid-template-columns:auto 1fr;gap:.85rem;align-items:start;background:var(--surface);border:1px solid var(--line);border-left:2px solid var(--gain);border-radius:3px;padding:.75rem 1rem}
+.fact .mark{color:var(--gain);font-weight:700;font-family:"Archivo",sans-serif;line-height:1.6}
+.fact.risk{border-left-color:var(--warn)}
+.fact.risk .mark{color:var(--warn)}
+.fact .body{font-size:.92rem;color:var(--ink-2)}
+.fact .body b{color:var(--ink);font-weight:700}
+
+/* ---------- next ---------- */
+ol.next{counter-reset:n;list-style:none;padding:0;margin:1.2rem 0}
+ol.next li{
+  counter-increment:n;position:relative;padding-left:2.4rem;margin-bottom:1rem;
+  max-width:64ch
+}
+ol.next li::before{
+  content:counter(n,decimal-leading-zero);position:absolute;left:0;top:.1rem;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
+  color:var(--accent);letter-spacing:.06em
+}
+ol.next b{display:block;margin-bottom:.1rem}
+ol.next span{color:var(--ink-2);font-size:.93rem}
+
+footer{margin-top:4rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--ink-3);font-size:.82rem;font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+@media (prefers-reduced-motion:no-preference){
+  a{transition:opacity .15s ease}
+  a:hover{opacity:.7}
+}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="kicker">Consensus Record · 2026-08-20</p>
+  <h1>鑑定卡儀表板共識書</h1>
+  <p class="dek">個人使用的寶可夢 PSA 10 收藏追蹤工具。這份文件記錄一場拷問式設計對談所敲定的每一個決定，以及每個決定背後的理由。</p>
+
+  <dl class="meta">
+    <div><dt>持有品</dt><dd>102</dd></div>
+    <div><dt>卡種（爬取範圍）</dt><dd>68</dd></div>
+    <div><dt>持有中成本</dt><dd>1,040,730</dd></div>
+    <div><dt>已售出</dt><dd>11</dd></div>
+    <div><dt>已決策</dt><dd>34</dd></div>
+  </dl>
+</header>
+
+<section>
+  <div class="sec-head"><span class="no">01</span><h2>這是什麼</h2></div>
+  <p>一個只給自己看的網頁儀表板，回答一個問題：<strong>我這批寶可夢鑑定卡現在值多少台幣，比我當初花的多還是少。</strong></p>
+  <p>它取代目前用來記帳的 Notion 資料庫，成為收藏資料的唯一存放處。市場行情全部來自 SNKRDUNK（日本），每天自動更新一次。</p>
+
+  <div class="scope">
+    <div class="in">
+      <h4>在範圍內</h4>
+      <ul>
+        <li>寶可夢卡，PSA 10</li>
+        <li>SNKRDUNK 日本市場成交</li>
+        <li>持有中與已售出的損益</li>
+        <li>整體市值走勢圖</li>
+        <li>新增／編輯／售出／刪除持有品</li>
+      </ul>
+    </div>
+    <div class="out">
+      <h4>明確不做</h4>
+      <ul>
+        <li>eBay 與任何第三方付費行情 API</li>
+        <li>比較頁與多卡並列比較</li>
+        <li>個別成交紀錄的畫面呈現</li>
+        <li>其他鑑定公司與其他分數的區分</li>
+        <li>UI 美化、LLM 問答（延後）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="no">02</span><h2>領域模型</h2></div>
+  <p>整場對談最重要的一個發現：規格裡的「卡」其實同時指三種不同的東西。把它們分開之後，後面所有問題才有辦法回答。</p>
+
+  <dl class="gloss">
+    <dt>卡種（Card）</dt>
+    <dd>一款可被唯一識別的卡，權威定義來自 SNKRDUNK 的 apparel。市值、動能、流動性都掛在卡種上。
+      <span class="avoid">避免：卡片、商品、product</span></dd>
+
+    <dt>持有品（Holding）</dt>
+    <dd>你實際擁有或曾經擁有的某一張實體卡。同一卡種可有多筆，各有自己的購入日與成本。實際資料中 <code>Charizard S8b 187</code> 有 7 筆，成本從 2,885 到 3,300 不等——這正是不能用「平均成本」建模的證據。
+      <span class="avoid">避免：收藏、庫存、inventory</span></dd>
+
+    <dt>成交紀錄（Sale）</dt>
+    <dd>市場上某一次已完成的買賣，與你是否持有無關。<strong>不對使用者顯示</strong>，它是市值與熱門度的原料。
+      <span class="avoid">避免：交易、transaction</span></dd>
+
+    <dt>市值（Market Value）</dt>
+    <dd>一個卡種在某一天的價值 ＝ <strong>該卡種近 30 天成交的中位數</strong>。全站只有這一個定義。近 30 天無成交時沿用最後一次算得出的值，並標註已過期幾天。</dd>
+
+    <dt>流動性（Liquidity）</dt>
+    <dd>由兩個數字共同構成：PSA 10 張數與近 3 個月成交筆數。兩者分開看沒有意義——存世 1,204 張但三個月只成交 18 筆，跟存世 1,204 張且成交 200 筆，是完全不同的兩張卡。</dd>
+
+    <dt>待審（Quarantined）</dt>
+    <dd>爬到但無法高信心確認為「單張、PSA 10、屬於此卡種」的成交。不參與任何計算，等待人工判定。</dd>
+  </dl>
+</section>
+
+<section>
+  <div class="sec-head"><span class="no">03</span><h2>資料怎麼流動</h2></div>
+  <div class="pipe">
+    <div class="step"><span class="n">SOURCE</span><span class="t">SNKRDUNK</span><span class="d">卡種主檔、去背卡圖、成交紀錄（JPY）</span></div>
+    <div class="step"><span class="n">SOURCE</span><span class="t">PriceCharting</span><span class="d">PSA 10 張數，每月一次</span></div>
+    <div class="step"><span class="n">SOURCE</span><span class="t">匯率 API</span><span class="d">每日 JPY／TWD，含歷史</span></div>
+    <div class="step"><span class="n">CLEAN</span><span class="t">白名單過濾</span><span class="d">不確定的一律進待審，不進計算</span></div>
+    <div class="step"><span class="n">STORE</span><span class="t">SQLite</span><span class="d">原幣與原始值永不改寫</span></div>
+    <div class="step"><span class="n">VIEW</span><span class="t">儀表板</span><span class="d">全部以 TWD 呈現</span></div>
+  </div>
+  <p>換匯只走一條路徑：<code>JPY 原幣（不可變）→ 成交當日匯率 → TWD</code>。匯率一經寫入即固定，<strong>永不以今日匯率回頭重算歷史</strong>——否則整條走勢圖會隨匯率上下平移，昨天看到的圖今天就不一樣。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="no">04</span><h2>畫面規格</h2></div>
+  <p>單一頁面，兩個區塊。上半告訴你整體狀況，下半讓你逐張卡看細節。</p>
+
+  <div class="screen">
+    <div class="zone">
+      <span class="zlabel">Figure ／ 上半部</span>
+      <ul>
+        <li><strong>走勢圖</strong>：總市值曲線，疊一條總成本階梯線——兩線之間的距離就是未實現損益</li>
+        <li>時間區間 <code>7D / 1M / 3M / YTD / ALL</code>（<strong>無 1D</strong>；資料不足一年時 YTD 隱藏）</li>
+        <li>每一天用「<strong>該日實際持有</strong>」的卡計算，賣出不會回頭改寫歷史</li>
+        <li>數字：未實現損益 ／ 已實現淨賺 86,108 ／ 報酬率 58.5%</li>
+      </ul>
+    </div>
+
+    <div class="zone">
+      <span class="zlabel">Collection ／ 持有中（預設分頁）</span>
+      <ul>
+        <li>卡圖牆，<strong>一格一個卡種</strong>，依市值高到低排序</li>
+        <li>圖下：卡名 ＋ 漲跌幅（持有多張時以總成本對總市值計算）</li>
+        <li>點擊展開：成本（多張時列出個別成本）／市值與漲跌幅／動能／流動性</li>
+      </ul>
+      <div class="tiles">
+        <div class="tile"><div class="img"></div><span class="nm">Charizard</span><span class="pct up">+12.3%</span></div>
+        <div class="tile"><div class="img"></div><span class="nm">Lucario</span><span class="pct dn">−4.1%</span></div>
+        <div class="tile"><div class="img"></div><span class="nm">Pikachu</span><span class="pct up">+0.8%</span></div>
+        <div class="tile"><div class="img"></div><span class="nm">Mimikyu</span><span class="pct up">+6.5%</span></div>
+        <div class="tile"><div class="img"></div><span class="nm">Dragonite</span><span class="pct dn">−1.2%</span></div>
+      </div>
+    </div>
+
+    <div class="zone">
+      <span class="zlabel">Collection ／ 已售出</span>
+      <ul>
+        <li>同樣是卡圖牆，同樣一格一個卡種，依售出日新到舊排序</li>
+        <li><strong>不需要展開</strong>——直接顯示成本 ＋ 淨賺（報酬率）。這些數字是終局的，不會再變</li>
+        <li>同一卡種可同時出現在兩個分頁：賣掉 2 張、還持有 5 張是正常狀態</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>卡圖規格</h3>
+  <p>存 SNKRDUNK 的 <code>xl</code> 原圖（1000×730、約 57 KB，68 張合計約 3.9 MB），再自動裁掉四周留白。不裁的話卡片只佔畫布中間一小塊，卡圖牆上每張卡的實際大小會參差不齊。</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="no">05</span><h2>已驗證的事實</h2></div>
+  <p>以下每一條都是實際跑過、不是查來的說法。</p>
+
+  <div class="facts">
+    <div class="fact"><span class="mark">✓</span><span class="body">SNKRDUNK 有可用的 JSON API：<code>GET /v1/apparels/{id}</code> 回傳 <b>英文卡名、日文卡名、官方去背卡圖、結構化卡種代碼</b>。不需要瀏覽器自動化。</span></div>
+    <div class="fact"><span class="mark">✓</span><span class="body">商品頁為伺服器端渲染，圖片網址在原始 HTML 裡；CDN <b>無防盜連</b>，四種尺寸皆可直接下載。<code>robots.txt</code> 只禁止 <code>/en/v1/*</code>。</span></div>
+    <div class="fact"><span class="mark">✓</span><span class="body">PSA 族群報告<b>不需要 cert number</b>，按系列與卡號查即可。PSA 官網受 Cloudflare 保護，但 PriceCharting 提供同樣資料且 <b>PSA 與 CGC 分欄</b>、純 SSR。</span></div>
+    <div class="fact"><span class="mark">✓</span><span class="body">eBay 官方確實無法取得成交價：Finding／Shopping API 已於 2025-02-05 停用，Browse API 只有在售，Marketplace Insights 不開放新申請。</span></div>
+    <div class="fact"><span class="mark">✓</span><span class="body">TCGdex 對日版卡覆蓋不足：102 筆持有品中僅 <b>30 筆有卡圖</b>、20 筆完全查無。這是改用 SNKRDUNK 當卡種主檔的直接原因。</span></div>
+    <div class="fact risk"><span class="mark">!</span><span class="body">成交紀錄端點 <code>/v1/apparels/{id}/used/listings</code> 回 <b>400（參數不符）而非 404</b>——端點存在，參數待解。用開發者工具看一次網路請求即可，屬待辦而非風險。</span></div>
+    <div class="fact risk"><span class="mark">!</span><span class="body">SNKRDUNK 的 PSA 10 篩選擋不掉三類髒資料：<b>多張一組</b>（<code>sizes</code> 有 1–10 枚，總價會被誤當單張）、<b>下架但未成交</b>、<b>離群值</b>。這三項仍須自行處理。</span></div>
+    <div class="fact risk"><span class="mark">!</span><span class="body">Notion 的 102 筆需對應到 SNKRDUNK 的 apparel id，兩套編碼不相通。採半自動比對＋人工確認，<b>絕不全自動</b>——對錯一張卡不會報錯，只會安靜地錯下去。</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="no">06</span><h2>決策總表</h2></div>
+  <p>依提問輪次排列。輪次不是流水號——它記錄了依賴順序：每一輪的問題，都必須等前一輪答案確定後才問得出來。</p>
+
+  <div class="tblwrap">
+    <table>
+      <caption>34 項決策</caption>
+      <thead><tr><th>編號</th><th>決定</th><th>理由</th></tr></thead>
+      <tbody>
+        <tr class="round-head"><td colspan="3">第一輪 · 根：這是什麼</td></tr>
+        <tr><td class="id">Q1</td><td class="dec">卡種／持有品／成交三者分開</td><td class="why">同卡種多張、成本各異；平均成本模型會丟失這個資訊</td></tr>
+        <tr><td class="id">Q2</td><td class="dec">市值 ＝ 30 天中位數，砍掉 1D</td><td class="why">成交稀疏，單筆離群值會讓總市值劇烈跳動</td></tr>
+
+        <tr class="round-head"><td colspan="3">第二輪 · 領域界線</td></tr>
+        <tr><td class="id">Q6</td><td class="dec">卡種主檔採外部權威</td><td class="why">自建等於維護一份沒有盡頭的卡片百科</td></tr>
+        <tr><td class="id">Q7</td><td class="dec">不設語言欄位</td><td class="why">系列代碼本身已決定語言，多一欄就多一個能自相矛盾的地方</td></tr>
+        <tr><td class="id">Q8</td><td class="dec">走勢圖只算持有中；已售出資料照存</td><td class="why">未實現與已實現是兩個問題，混在同一數字會看不懂</td></tr>
+
+        <tr class="round-head"><td colspan="3">第三輪 A · 資料源重新定錨</td></tr>
+        <tr><td class="id">A1</td><td class="dec">免費匯率 API，含歷史匯率</td><td class="why">回填舊成交需要當日匯率，台銀牌告的歷史要自己存</td></tr>
+        <tr><td class="id">A2</td><td class="dec">保留 PSA 10 張數，改用 PriceCharting</td><td class="why">不需 cert number，且能繞過 PSA 官網的 Cloudflare</td></tr>
+        <tr><td class="id">A3</td><td class="dec">SNKRDUNK 為卡種主檔唯一權威</td><td class="why">主檔與價格同源，不會出現抓不到價格的鬼卡</td></tr>
+        <tr><td class="id">A4</td><td class="dec">Notion 對應採半自動＋人工確認</td><td class="why">全自動對錯不會報錯，只會安靜地錯</td></tr>
+        <tr><td class="id">A5</td><td class="dec">UI 不標註「僅日本市場」</td><td class="why">單人使用，使用者自己清楚；若有第二人須重新檢視</td></tr>
+
+        <tr class="round-head"><td colspan="3">第三輪 B · 計算規則</td></tr>
+        <tr><td class="id">B1</td><td class="dec">百分比一律為報酬率，非倍數</td><td class="why">同畫面兩種算法遲早看錯一次</td></tr>
+        <tr><td class="id">B2</td><td class="dec">走勢圖採「當時持有」</td><td class="why">今日持有回推會回頭改寫歷史，圖會說謊</td></tr>
+        <tr><td class="id">B3</td><td class="dec">能回填多少就回填多少，不補值</td><td class="why">補值是製造假資料，會讓所有線失去可信度</td></tr>
+        <tr><td class="id">B4</td><td class="dec">白名單清洗，其餘進待審</td><td class="why">稀疏樣本的中位數，混進一筆垃圾是毀滅性的</td></tr>
+        <tr><td class="id">B5</td><td class="dec">Python ＋ SQLite ＋ FastAPI ＋ 輕量前端</td><td class="why">此規模下 PostgreSQL 只帶來維運負擔</td></tr>
+
+        <tr class="round-head"><td colspan="3">第三輪 C · 營運</td></tr>
+        <tr><td class="id">C1</td><td class="dec">零成交時沿用舊值＋標註過期天數</td><td class="why">卡沒有變得不值錢，只是沒人在賣</td></tr>
+        <tr><td class="id">C2</td><td class="dec">工具完全取代 Notion</td><td class="why">單一真實來源，不做雙寫</td></tr>
+        <tr><td class="id">C4</td><td class="dec">移除比較頁</td><td class="why">使用者判定自己沒有這個需求</td></tr>
+        <tr><td class="id">C5</td><td class="dec">每天全部跑一遍，不分批</td><td class="why">68 個卡種的規模不需要分批；分批會讓市值最舊差七天</td></tr>
+        <tr><td class="id">C6</td><td class="dec">被動健康摘要，不發通知</td><td class="why">安靜說謊的儀表板比沒有儀表板更糟；通知會被習慣性忽略</td></tr>
+
+        <tr class="round-head"><td colspan="3">第四輪 D · 畫面結構</td></tr>
+        <tr><td class="id">D1</td><td class="dec">保留 PSA 10 張數指標</td><td class="why">成本降至每月爬 68 頁，且它回答動能答不出的問題</td></tr>
+        <tr><td class="id">D2</td><td class="dec">收藏總覽一格一個卡種</td><td class="why">市值等四個數字都屬於卡種；逐張列會重複印 90% 的資訊</td></tr>
+        <tr><td class="id">D3</td><td class="dec">移除交易明細畫面（資料照存）</td><td class="why">畫面移除，但市值與熱門度的原料仍需保留</td></tr>
+        <tr><td class="id">D4</td><td class="dec">完整 CRUD：新增／編輯／售出／刪除</td><td class="why">沒有刪除功能，第一次手滑輸錯就會開始不信任整個系統</td></tr>
+        <tr><td class="id">D5</td><td class="dec">新增時直接搜尋 SNKRDUNK</td><td class="why">只搜本地主檔會形成死結，新卡永遠加不進來</td></tr>
+        <tr><td class="id">D6</td><td class="dec">卡圖牆＋點擊展開細節</td><td class="why">九個數字同時推到面前，等於一個都沒推到</td></tr>
+
+        <tr class="round-head"><td colspan="3">第五輪 E ／ F · 收尾</td></tr>
+        <tr><td class="id">E1</td><td class="dec">張數與熱門度合併為「流動性」</td><td class="why">兩者分開看幾乎沒意義，並列才有意義</td></tr>
+        <tr><td class="id">E2</td><td class="dec">走勢圖疊上成本線</td><td class="why">兩線之間的距離即未實現損益，讓圖自己說話</td></tr>
+        <tr><td class="id">E3</td><td class="dec">持有中依市值高到低排序</td><td class="why">穩定的排序能形成肌肉記憶；按漲跌幅會每天洗牌</td></tr>
+        <tr><td class="id">E4</td><td class="dec">已售出獨立卡圖牆，不需展開</td><td class="why">已售出的數字是終局的，沒有再看一層的需求</td></tr>
+        <tr><td class="id">E5</td><td class="dec">全部視為 PSA 10，不區分鑑定</td><td class="why">使用者已於 Notion 統一並保有完整備份</td></tr>
+        <tr><td class="id">F1</td><td class="dec">已售出同樣採卡種聚合</td><td class="why">兩區同一套邏輯，眼睛不用切換模式</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="no">07</span><h2>下一步</h2></div>
+  <p>以下順序刻意如此：<strong>對應表沒建好之前，任何價格都是不可信的</strong>，所以它排在爬蟲之前。</p>
+  <ol class="next">
+    <li><b>解出成交紀錄端點的參數</b><span>用瀏覽器開發者工具看一次 SNKRDUNK 商品頁的網路請求。這一步會確認成交歷史有多深，進而決定走勢圖能回填到哪一天。</span></li>
+    <li><b>建立 68 個卡種的對應表</b><span>以系列＋卡號向 SNKRDUNK 撈候選，附卡圖分批送出，由你用看的確認。這是整個系統的地基。</span></li>
+    <li><b>匯入 Notion 的 102 筆持有品</b><span>含 11 筆已售出。卡號補零至三位、<code>SVP</code> 正規化為 <code>SV-P</code>，原始值一律保留不改寫。</span></li>
+    <li><b>建立爬取與清洗管線</b><span>每日全量 68 個卡種，白名單過濾，不確定的進待審佇列。</span></li>
+    <li><b>接上匯率與 PSA 張數</b><span>匯率每日，張數每月。</span></li>
+    <li><b>做畫面</b><span>Figure 區與 Collection 兩個分頁，外加完整 CRUD。</span></li>
+  </ol>
+</section>
+
+<footer>
+  CONTEXT.md · docs/adr/0001–0006 · 本文件為對談共識紀錄，非實作規格的替代品
+</footer>
+
+</div>
