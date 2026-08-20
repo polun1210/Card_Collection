@@ -369,8 +369,9 @@ footer{margin-top:4rem;padding-top:1.2rem;border-top:1px solid var(--line);color
     <div class="fact"><span class="mark">✓</span><span class="body">PSA 族群報告<b>不需要 cert number</b>，按系列與卡號查即可。PSA 官網受 Cloudflare 保護，但 PriceCharting 提供同樣資料且 <b>PSA 與 CGC 分欄</b>、純 SSR。</span></div>
     <div class="fact"><span class="mark">✓</span><span class="body">eBay 官方確實無法取得成交價：Finding／Shopping API 已於 2025-02-05 停用，Browse API 只有在售，Marketplace Insights 不開放新申請。</span></div>
     <div class="fact"><span class="mark">✓</span><span class="body">TCGdex 對日版卡覆蓋不足：102 筆持有品中僅 <b>30 筆有卡圖</b>、20 筆完全查無。這是改用 SNKRDUNK 當卡種主檔的直接原因。</span></div>
-    <div class="fact risk"><span class="mark">!</span><span class="body">成交紀錄端點 <code>/v1/apparels/{id}/used/listings</code> 回 <b>400（參數不符）而非 404</b>——端點存在，參數待解。用開發者工具看一次網路請求即可，屬待辦而非風險。</span></div>
-    <div class="fact risk"><span class="mark">!</span><span class="body">SNKRDUNK 的 PSA 10 篩選擋不掉三類髒資料：<b>多張一組</b>（<code>sizes</code> 有 1–10 枚，總價會被誤當單張）、<b>下架但未成交</b>、<b>離群值</b>。這三項仍須自行處理。</span></div>
+    <div class="fact"><span class="mark">✓</span><span class="body">成交紀錄端點已解出：<code>GET /v3/products/{productCatalogId}/trading-history</code>，參數 <code>range</code>／<code>condition_code</code>／<code>variant_id</code>，免登入。路徑上的 id 是 <b>productCatalogId，不是 apparel id</b>——用錯會回 200 空資料而不報錯。舊記錄的 <code>/v1/apparels/{id}/used/listings</code> 並不存在（見 ADR-0007）。</span></div>
+    <div class="fact"><span class="mark">✓</span><span class="body">成交明細 <code>trades</code> <b>固定最多 20 筆且無分頁</b>；走勢圖 <code>chart</code> 可回填至 <b>2023 年</b>，但為每日聚合、價格不等於任何一筆實際成交，只能當參考線，不可寫入成交紀錄。</span></div>
+    <div class="fact"><span class="mark">✓</span><span class="body">三類髒資料已縮減為一類：<code>variant_id</code>（枚数）可在來源端排除<b>多張一組</b>，<code>trades</code> 本身即已完成成交、不含<b>下架未成交</b>。<b>只剩離群值</b>需自行處理。</span></div>
     <div class="fact risk"><span class="mark">!</span><span class="body">Notion 的 102 筆需對應到 SNKRDUNK 的 apparel id，兩套編碼不相通。採半自動比對＋人工確認，<b>絕不全自動</b>——對錯一張卡不會報錯，只會安靜地錯下去。</span></div>
   </div>
 </section>
@@ -438,7 +439,7 @@ footer{margin-top:4rem;padding-top:1.2rem;border-top:1px solid var(--line);color
   <div class="sec-head"><span class="no">07</span><h2>下一步</h2></div>
   <p>以下順序刻意如此：<strong>對應表沒建好之前，任何價格都是不可信的</strong>，所以它排在爬蟲之前。</p>
   <ol class="next">
-    <li><b>解出成交紀錄端點的參數</b><span>用瀏覽器開發者工具看一次 SNKRDUNK 商品頁的網路請求。這一步會確認成交歷史有多深，進而決定走勢圖能回填到哪一天。</span></li>
+    <li><b>解出成交紀錄端點的參數 —— 已完成</b><span>由前端 JS bundle 解出 <code>/v3/products/{productCatalogId}/trading-history</code>。成交明細只回最新 20 筆，走勢圖可回填至 2023 年。詳見 ADR-0007。</span></li>
     <li><b>建立 68 個卡種的對應表</b><span>以系列＋卡號向 SNKRDUNK 撈候選，附卡圖分批送出，由你用看的確認。這是整個系統的地基。</span></li>
     <li><b>匯入 Notion 的 102 筆持有品</b><span>含 11 筆已售出。卡號補零至三位、<code>SVP</code> 正規化為 <code>SV-P</code>，原始值一律保留不改寫。</span></li>
     <li><b>建立爬取與清洗管線</b><span>每日全量 68 個卡種，白名單過濾，不確定的進待審佇列。</span></li>
