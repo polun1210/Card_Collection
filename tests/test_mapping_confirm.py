@@ -150,19 +150,19 @@ def test_進度隨確認否決推翻正確變動(client):
 
     # Act / Assert
     assert client.get("/api/mapping/progress").json() == {
-        "confirmed": 0, "rejected": 0, "pending": 70
+        "confirmed": 0, "rejected": 0, "pending": 68
     }
     _confirm(client, normal["id"], MEGA_LUCARIO[0])
     assert client.get("/api/mapping/progress").json() == {
-        "confirmed": 1, "rejected": 0, "pending": 69
+        "confirmed": 1, "rejected": 0, "pending": 67
     }
     client.post("/api/mapping/reject", json={"mapping_candidate_id": error_card["id"]})
     assert client.get("/api/mapping/progress").json() == {
-        "confirmed": 1, "rejected": 1, "pending": 68
+        "confirmed": 1, "rejected": 1, "pending": 66
     }
     client.delete(f"/api/mapping/confirm/{normal['id']}")
     assert client.get("/api/mapping/progress").json() == {
-        "confirmed": 0, "rejected": 1, "pending": 69
+        "confirmed": 0, "rejected": 1, "pending": 67
     }
 
 
@@ -214,4 +214,4 @@ def test_推翻一個沒有已確認卡種的列回404(client):
 
     # Assert
     assert response.status_code == 404
-    assert client.get("/api/mapping/progress").json()["pending"] == 70
+    assert client.get("/api/mapping/progress").json()["pending"] == 68

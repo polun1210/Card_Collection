@@ -6,7 +6,7 @@
 import hashlib
 from pathlib import Path
 
-EXPECTED_CARD_COUNT = 70
+EXPECTED_CARD_COUNT = 68
 
 
 def _queue(client) -> list[dict]:
@@ -47,15 +47,13 @@ def test_卡號正規化為三位數並保留原始寫法(client):
     assert all(len(row["number_normalized"]) == 3 for row in rows)
 
 
-def test_系列代碼_SVP_正規化為_SV_P_且原始值不變(client):
+def test_系列代碼原樣保留不做收斂(client):
     # Act
     rows = _queue(client)
-    svp_rows = [row for row in rows if row["series_raw"] == "SVP"]
 
-    # Assert
-    assert svp_rows, "來源資料含 SVP 寫法"
-    assert all(row["series_normalized"] == "SV-P" for row in svp_rows)
-    assert all(row["series_raw"] == "SVP" for row in svp_rows)
+    # Assert：系列代碼本身決定語言，收斂會讓不同語言的系列被混為一談
+    assert all(row["series_normalized"] == row["series_raw"] for row in rows)
+    assert any(row["series_raw"] == "SV-P" for row in rows)
 
 
 def test_錯體版與正常版各自佔一列(client):
@@ -137,7 +135,7 @@ def test_首頁列出全部待確認卡種(client):
     # Assert
     assert response.status_code == 200
     assert "MEGA Lucario Printing Error" in response.text
-    assert "待處理 70" in response.text
+    assert "待處理 68" in response.text
 
 
 def test_原始欄位與來源CSV逐字相同(client, notion_csv: Path):

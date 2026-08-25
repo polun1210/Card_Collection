@@ -133,7 +133,7 @@ def test_全部處理完後待處理歸零(client):
 
     # Assert
     assert client.get("/api/mapping/progress").json() == {
-        "confirmed": 2, "rejected": 68, "pending": 0
+        "confirmed": 2, "rejected": 66, "pending": 0
     }
     assert client.get("/api/mapping/queue").json() == []
 
