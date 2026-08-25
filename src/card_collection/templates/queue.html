@@ -18,17 +18,23 @@
   tbody tr:last-child td { border-bottom: none; }
   td.norm { font-family: ui-monospace, monospace; color: #6b7280; white-space: nowrap; }
   td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cands { display: flex; gap: .6rem; flex-wrap: wrap; }
+  .cand { width: 6.5rem; font-size: .72rem; line-height: 1.35; }
+  .cand img { width: 100%; aspect-ratio: 10/7; object-fit: contain; background: #f3f4f6; border-radius: 3px; }
+  .cand .code { font-family: ui-monospace, monospace; color: #6b7280; display: block; }
+  .cand .ja { color: #6b7280; display: block; }
+  .none { color: #9ca3af; font-size: .82rem; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>卡種對應</h1>
   <p class="progress">已確認 {{ progress.confirmed }} ／ 已否決 {{ progress.rejected }} ／ 待處理 {{ progress.pending }}</p>
-  <p class="hint">候選卡圖與確認按鈕尚未實作，見 #4 與 #5。</p>
+  <p class="hint">確認按鈕尚未實作，見 #5。卡號相同的卡會撈到同一批候選，需靠卡圖分辨。</p>
   <div class="tblwrap">
     <table>
       <thead>
-        <tr><th>系列</th><th>卡號</th><th>卡名</th><th>正規化後</th></tr>
+        <tr><th>系列</th><th>卡號</th><th>卡名</th><th>正規化後</th><th>SNKRDUNK 候選</th></tr>
       </thead>
       <tbody>
         {% for row in rows %}
@@ -37,6 +43,22 @@
           <td class="num">{{ row.number_raw }}</td>
           <td>{{ row.card_name_raw }}</td>
           <td class="norm">{{ row.series_normalized }} / {{ row.number_normalized }}</td>
+          <td>
+            {% if row.candidates %}
+            <div class="cands">
+              {% for candidate in row.candidates %}
+              <div class="cand">
+                <img src="{{ candidate.image_url }}" alt="{{ candidate.name_ja }}" loading="lazy">
+                <span class="code">{{ candidate.card_code }}</span>
+                <span>{{ candidate.name_en }}</span>
+                <span class="ja">{{ candidate.name_ja }}</span>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="none">查無候選</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

@@ -1,0 +1,213 @@
+{
+  "id": 744296,
+  "productCatalogId": 859607,
+  "accessories": "中国語エラー品のため型番確認必須",
+  "productNumber": "pkmn-tcg-M2a-228",
+  "officialProductNumber": "",
+  "name": "MEGA Lucario ex MA :Chinese Text Printing Error [M2a 228/193](High Class Pack \"MEGA Dream ex\")",
+  "localizedName": "メガルカリオex MA :中国語箔押しエラー [M2a 228/193](ハイクラスパック「MEGAドリームex」)",
+  "primaryMedia": {
+    "id": 2064563,
+    "imageUrl": "https://cdn.snkrdunk.com/upload_bg_removed/pkmn-tcg-2025-12-23-06.webp",
+    "type": 2
+  },
+  "medias": [],
+  "colorName": "-",
+  "colorLocalizedName": "-",
+  "releasedAt": "2025-11-27T15:00:00Z",
+  "displayReleasedAt": "2025年11月28日",
+  "displayReleaseDay": "11/28",
+  "regularPrice": null,
+  "minPrice": 0,
+  "listingCount": 0,
+  "listingCountText": "0",
+  "usedMinPrice": 20000,
+  "usedListingCount": 21,
+  "usedListingCountText": "21",
+  "totalListingCount": 0,
+  "totalListingCountText": "0",
+  "pbListingCount": 0,
+  "pbListingCountText": "Sold out",
+  "salePriceText": null,
+  "saleDiscountRateText": null,
+  "minPriceOfNewListing": 0,
+  "maxPrice": 0,
+  "totalOfferCount": 0,
+  "totalOfferCountText": "0",
+  "displayRegularPrice": "-",
+  "displayPrice": "-",
+  "canResale": true,
+  "isPrivateBrand": false,
+  "brands": [
+    {
+      "id": "pokemon",
+      "name": "Pokemon Card Game",
+      "localizedName": "ポケモンカードゲーム(ポケカ)",
+      "description": "ポケモンカードゲームは、人気ゲームソフト「ポケットモンスター」シリーズの世界観を落とし込んだトレーディングカードゲーム。「PCG」や「ポケカ」などの略称で親しまれている。1996年に発売されて以降、様々なシリーズが発売され、今では年に一度「ポケモンワールドチャンピオンシップス」と呼ばれる大会も開かれるなど、世界中で楽しまれているコンテンツだ。また、プレイ人口もさることながらコレクター需要も高い。",
+      "metaDescription": "【鑑定つき】ポケモンカードゲーム/ポケカのトレカ売買ならスニダン！プロ鑑定士の本物鑑定&全額補償付きだから安心・安全。Pokemon Card Gameの新作発売日や最新情報をお届け！シングルパック・ボックスの新品/中古通販はスニーカーダンクをチェック！",
+      "title": "ポケモンカードゲーム(Pokemon Card Game) 人気の新作・新品ボックス通販【スニーカーダンク】",
+      "headDescription": "ポケモンカードゲーム(Pokemon Card Game) 人気の新作・新品ボックス一覧",
+      "headContent": "",
+      "mobileHeadContent": "",
+      "tailContent": "",
+      "mobileTailContent": "",
+      "apparelSellCaution": "",
+      "hideArticleRanking": false,
+      "departments": [
+        "hobby"
+      ]
+    }
+  ],
+  "primaryDistributionBrandLogo": {
+    "id": 0,
+    "imageUrl": "https://cdn.snkrdunk.com/uploads/media/",
+    "type": -1
+  },
+  "sizes": [
+    {
+      "id": 4520427,
+      "localizedName": "1枚",
+      "priority": 100,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520428,
+      "localizedName": "2枚",
+      "priority": 95,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520429,
+      "localizedName": "3枚",
+      "priority": 90,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520430,
+      "localizedName": "4枚",
+      "priority": 85,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520431,
+      "localizedName": "5枚",
+      "priority": 80,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520432,
+      "localizedName": "6枚",
+      "priority": 75,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520433,
+      "localizedName": "7枚",
+      "priority": 70,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520434,
+      "localizedName": "8枚",
+      "priority": 65,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520435,
+      "localizedName": "9枚",
+      "priority": 60,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    },
+    {
+      "id": 4520436,
+      "localizedName": "10枚",
+      "priority": 55,
+      "janCode": "",
+      "quantity": 1,
+      "parcelType": 1,
+      "isDeleted": false
+    }
+  ],
+  "rootCategories": [
+    {
+      "id": 6,
+      "localizedName": "トレカ"
+    }
+  ],
+  "categories": [
+    {
+      "id": 25,
+      "name": "trading-card-single",
+      "localizedName": "トレカ (シングルカード)",
+      "priority": 10
+    }
+  ],
+  "subCategories": [],
+  "departmentName": "hobby",
+  "freeReleaseText": "",
+  "isNewRelease": false,
+  "isReleased": true,
+  "isPreOrderable": false,
+  "hasPrivateBrandListings": false,
+  "isListingDisabled": false,
+  "canListUsed": true,
+  "sellCaution": "",
+  "sizeChartDefaultSizeId": 0,
+  "labels": [
+    {
+      "key": "authentication",
+      "value": "本物保証"
+    },
+    {
+      "key": "creditCard",
+      "value": "支払い分割可"
+    }
+  ],
+  "appraisalPoints": [
+    {
+      "imageUrl": "https://assets.snkrdunk.com/d2fefa80ad43eeb/img/product/product-w-appraisal-img-6.png",
+      "title": "数千以上の鑑定実績を持つ\n鑑定士陣の本物鑑定",
+      "text": "専門知識を持った鑑定士がお客様の商品を丁寧に鑑定。"
+    },
+    {
+      "imageUrl": "https://assets.snkrdunk.com/d2fefa80ad43eeb/img/product/product-w-appraisal-img-2.png",
+      "title": "正規品を証明する\nスニダン鑑定済バッジ",
+      "text": "鑑定士による真贋鑑定をクリアし本物(正規品)と認められた商品のみ、鑑定済バッジを取付けお客様の元へ。"
+    }
+  ],
+  "apparelInfo": {
+    "isTradingCard": true,
+    "hasPbItem": false
+  },
+  "isUnderRetail": false,
+  "differencePrice": 0,
+  "createdAt": "2025-12-23T07:01:55Z",
+  "updatedAt": "2026-03-19T01:17:29Z"
+}
