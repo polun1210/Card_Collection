@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>卡種對應 · 待確認清單</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: "Noto Sans TC", system-ui, sans-serif; margin: 0; padding: 2rem 1.5rem 4rem; line-height: 1.6; }
+  .wrap { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 .3rem; }
+  .progress { font-variant-numeric: tabular-nums; font-weight: 600; margin: 0 0 1.5rem; }
+  .hint { color: #6b7280; font-size: .9rem; margin: 0 0 1.5rem; }
+  .tblwrap { overflow-x: auto; border: 1px solid #d1d5db; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .92rem; }
+  th, td { padding: .55rem .9rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+  thead th { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.norm { font-family: ui-monospace, monospace; color: #6b7280; white-space: nowrap; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>卡種對應</h1>
+  <p class="progress">已確認 {{ progress.confirmed }} ／ 已否決 {{ progress.rejected }} ／ 待處理 {{ progress.pending }}</p>
+  <p class="hint">候選卡圖與確認按鈕尚未實作，見 #4 與 #5。</p>
+  <div class="tblwrap">
+    <table>
+      <thead>
+        <tr><th>系列</th><th>卡號</th><th>卡名</th><th>正規化後</th></tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.series_raw }}</td>
+          <td class="num">{{ row.number_raw }}</td>
+          <td>{{ row.card_name_raw }}</td>
+          <td class="norm">{{ row.series_normalized }} / {{ row.number_normalized }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>
