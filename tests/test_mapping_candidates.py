@@ -160,3 +160,16 @@ def test_候選缺少卡圖時不靜默收下(client, snkrdunk):
     # Assert：殘缺的候選不進資料庫
     assert response.status_code >= 500
     assert client.get("/api/mapping/queue").json()[0]["candidates"] == []
+
+
+def test_首頁第二次載入不再打外部(client, snkrdunk):
+    # Arrange
+    client.get("/", params={"limit": 14})
+    first_call_count = len(snkrdunk.requests)
+
+    # Act
+    client.get("/", params={"limit": 14})
+
+    # Assert：補的必須是顯示中的那一批，否則每次載入都在抓下一批
+    assert first_call_count > 0
+    assert len(snkrdunk.requests) == first_call_count

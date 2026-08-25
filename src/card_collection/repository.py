@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from .notion_csv import CardKind
-from .snkrdunk import Candidate
+from .snkrdunk import Apparel
 
 STATUS_PENDING = "pending"
 STATUS_CONFIRMED = "confirmed"
@@ -62,14 +62,8 @@ class MappingCandidateRepository:
     def with_candidates(self, row: dict) -> dict:
         return {**row, "candidates": self._candidates_of(row["id"])}
 
-    def list_without_candidates(self, limit: int | None = None) -> tuple[dict, ...]:
-        """尚未向 SNKRDUNK 查過候選的列。查過但查無結果的不再重查。"""
-        return self._select_pending(
-            _QUEUE_COLUMNS, limit, extra_where="AND candidates_fetched_at IS NULL"
-        )
-
     def record_candidates(
-        self, mapping_candidate_id: int, candidates: Iterable[Candidate]
+        self, mapping_candidate_id: int, candidates: Iterable[Apparel]
     ) -> None:
         self._connection.executemany(
             """
@@ -96,12 +90,10 @@ class MappingCandidateRepository:
         )
         self._connection.commit()
 
-    def _select_pending(
-        self, columns: str, limit: int | None, extra_where: str = ""
-    ) -> tuple[dict, ...]:
+    def _select_pending(self, columns: str, limit: int | None) -> tuple[dict, ...]:
         query = (
             f"SELECT {columns} FROM card_mapping_candidate "
-            f"WHERE status = ? {extra_where} {_STABLE_ORDER}"
+            f"WHERE status = ? {_STABLE_ORDER}"
         )
         parameters: tuple = (STATUS_PENDING,)
         if limit is not None:
@@ -116,6 +108,72 @@ class MappingCandidateRepository:
             "SELECT apparel_id, name_en, name_ja, card_code, image_url "
             "FROM card_candidate WHERE mapping_candidate_id = ? ORDER BY id",
             (mapping_candidate_id,),
+        ).fetchall()
+        return tuple(dict(row) for row in rows)
+
+    def confirm(self, row: dict, apparel: Apparel) -> None:
+        """寫入卡種主檔並把該列標為已確認。兩件事同一個交易，不留半成品。"""
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO card
+                    (apparel_id, product_catalog_id, name_en, name_ja, card_code,
+                     image_url, series_raw, number_raw, card_name_raw,
+                     mapping_candidate_id, confirmed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    apparel.apparel_id,
+                    apparel.product_catalog_id,
+                    apparel.name_en,
+                    apparel.name_ja,
+                    apparel.card_code,
+                    apparel.image_url,
+                    row["series_raw"],
+                    row["number_raw"],
+                    row["card_name_raw"],
+                    row["id"],
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
+            self._connection.execute(
+                "UPDATE card_mapping_candidate SET status = ?, confirmed_apparel_id = ? "
+                "WHERE id = ?",
+                (STATUS_CONFIRMED, apparel.apparel_id, row["id"]),
+            )
+
+    def reject(self, mapping_candidate_id: int) -> None:
+        with self._connection:
+            self._connection.execute(
+                "UPDATE card_mapping_candidate SET status = ? WHERE id = ?",
+                (STATUS_REJECTED, mapping_candidate_id),
+            )
+
+    def undo_confirm(self, mapping_candidate_id: int) -> bool:
+        """推翻確認：該列回到待處理，主檔中對應的卡種被移除。"""
+        with self._connection:
+            deleted = self._connection.execute(
+                "DELETE FROM card WHERE mapping_candidate_id = ?",
+                (mapping_candidate_id,),
+            ).rowcount
+            if not deleted:
+                return False
+            self._connection.execute(
+                "UPDATE card_mapping_candidate "
+                "SET status = ?, confirmed_apparel_id = NULL WHERE id = ?",
+                (STATUS_PENDING, mapping_candidate_id),
+            )
+        return True
+
+    def find_card(self, apparel_id: int) -> dict | None:
+        row = self._connection.execute(
+            "SELECT * FROM card WHERE apparel_id = ?", (apparel_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def list_cards(self) -> tuple[dict, ...]:
+        rows = self._connection.execute(
+            "SELECT * FROM card ORDER BY series_raw, number_raw, card_name_raw"
         ).fetchall()
         return tuple(dict(row) for row in rows)
 

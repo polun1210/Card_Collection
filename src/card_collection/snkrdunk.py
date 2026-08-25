@@ -33,12 +33,14 @@ class SnkrdunkError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class Candidate:
+class Apparel:
     apparel_id: int
     name_en: str
     name_ja: str
     card_code: str
     image_url: str
+    # 確認時才需要，取不到就不能寫進卡種主檔（ADR-0007）。
+    product_catalog_id: int | None
 
 
 class SnkrdunkClient:
@@ -55,10 +57,10 @@ class SnkrdunkClient:
         self._request_interval = request_interval
         self._has_requested = False
 
-    def search_candidates(self, series: str, number: str) -> tuple[Candidate, ...]:
+    def search_candidates(self, series: str, number: str) -> tuple[Apparel, ...]:
         apparel_ids = self._search_apparel_ids(f"{series} {number}")
         return tuple(
-            self._fetch_candidate(apparel_id)
+            self.fetch_apparel(apparel_id)
             for apparel_id in apparel_ids[:MAX_CANDIDATES]
         )
 
@@ -67,7 +69,7 @@ class SnkrdunkClient:
         found = (int(match) for match in _APPAREL_LINK.findall(response.text))
         return list(dict.fromkeys(found))
 
-    def _fetch_candidate(self, apparel_id: int) -> Candidate:
+    def fetch_apparel(self, apparel_id: int) -> Apparel:
         payload = self._get(
             f"/v1/apparels/{apparel_id}", headers={"Accept": "application/json"}
         ).json()
@@ -76,12 +78,13 @@ class SnkrdunkClient:
         if not name_en or not image_url:
             raise SnkrdunkError(f"SNKRDUNK 的 apparel {apparel_id} 缺少卡名或卡圖")
         card_code = _CARD_CODE.search(name_en)
-        return Candidate(
+        return Apparel(
             apparel_id=apparel_id,
             name_en=name_en,
             name_ja=payload.get("localizedName") or "",
             card_code=card_code.group(1) if card_code else "",
             image_url=image_url,
+            product_catalog_id=payload.get("productCatalogId"),
         )
 
     def _get(self, path: str, **kwargs) -> httpx.Response:

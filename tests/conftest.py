@@ -29,6 +29,7 @@ class RecordedSnkrdunk:
         self.forced_status: int | None = None
         self.raise_network_error = False
         self.strip_card_image = False
+        self.strip_product_catalog_id = False
         self.sleeps: list[float] = []
 
     def sleep(self, seconds: float) -> None:
@@ -55,6 +56,8 @@ class RecordedSnkrdunk:
             if self.strip_card_image:
                 # 錄下的回應拿掉卡圖，用來驗證殘缺資料不會被靜默收下。
                 payload.pop("primaryMedia", None)
+            if self.strip_product_catalog_id:
+                payload.pop("productCatalogId", None)
             return httpx.Response(200, json=payload)
         return httpx.Response(404, text="unrecorded")
 

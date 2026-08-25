@@ -26,6 +26,21 @@ CREATE TABLE IF NOT EXISTS card_candidate (
     image_url            TEXT NOT NULL,
     UNIQUE (mapping_candidate_id, apparel_id)
 );
+
+CREATE TABLE IF NOT EXISTS card (
+    apparel_id           INTEGER PRIMARY KEY,
+    product_catalog_id   INTEGER NOT NULL,
+    name_en              TEXT NOT NULL,
+    name_ja              TEXT NOT NULL,
+    card_code            TEXT NOT NULL,
+    image_url            TEXT NOT NULL,
+    series_raw           TEXT NOT NULL,
+    number_raw           TEXT NOT NULL,
+    card_name_raw        TEXT NOT NULL,
+    mapping_candidate_id INTEGER NOT NULL UNIQUE
+                         REFERENCES card_mapping_candidate(id),
+    confirmed_at         TEXT NOT NULL
+);
 """
 
 # 尚未引入 Alembic（見 #1 規格）。在那之前，缺欄位就補上——只加不改。

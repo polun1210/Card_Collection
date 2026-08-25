@@ -7,34 +7,47 @@
 <style>
   :root { color-scheme: light dark; }
   body { font-family: "Noto Sans TC", system-ui, sans-serif; margin: 0; padding: 2rem 1.5rem 4rem; line-height: 1.6; }
-  .wrap { max-width: 60rem; margin: 0 auto; }
+  .wrap { max-width: 72rem; margin: 0 auto; }
   h1 { font-size: 1.5rem; margin: 0 0 .3rem; }
-  .progress { font-variant-numeric: tabular-nums; font-weight: 600; margin: 0 0 1.5rem; }
+  h2 { font-size: 1.1rem; margin: 2.5rem 0 .8rem; }
+  .progress { font-variant-numeric: tabular-nums; font-weight: 600; margin: 0 0 1rem; }
   .hint { color: #6b7280; font-size: .9rem; margin: 0 0 1.5rem; }
+  #error { display: none; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;
+           border-radius: 4px; padding: .7rem 1rem; margin-bottom: 1.2rem; font-size: .9rem; }
   .tblwrap { overflow-x: auto; border: 1px solid #d1d5db; border-radius: 4px; }
-  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .92rem; }
-  th, td { padding: .55rem .9rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+  table { border-collapse: collapse; width: 100%; min-width: 46rem; font-size: .92rem; }
+  th, td { padding: .55rem .9rem; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
   thead th { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; white-space: nowrap; }
   tbody tr:last-child td { border-bottom: none; }
   td.norm { font-family: ui-monospace, monospace; color: #6b7280; white-space: nowrap; }
   td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   .cands { display: flex; gap: .6rem; flex-wrap: wrap; }
-  .cand { width: 6.5rem; font-size: .72rem; line-height: 1.35; }
+  .cand { width: 7rem; font-size: .72rem; line-height: 1.35; }
   .cand img { width: 100%; aspect-ratio: 10/7; object-fit: contain; background: #f3f4f6; border-radius: 3px; }
   .cand .code { font-family: ui-monospace, monospace; color: #6b7280; display: block; }
   .cand .ja { color: #6b7280; display: block; }
   .none { color: #9ca3af; font-size: .82rem; }
+  button { font: inherit; font-size: .78rem; padding: .25rem .6rem; border: 1px solid #9ca3af;
+           border-radius: 3px; background: transparent; cursor: pointer; }
+  button.primary { border-color: #0b7a4b; color: #0b7a4b; width: 100%; margin-top: .3rem; }
+  button.danger { border-color: #b91c1c; color: #b91c1c; }
+  .manual { margin-top: .6rem; display: flex; gap: .35rem; align-items: center; }
+  .manual input { font: inherit; font-size: .78rem; width: 7rem; padding: .25rem .4rem;
+                  border: 1px solid #9ca3af; border-radius: 3px; }
+  .actions { white-space: nowrap; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>卡種對應</h1>
   <p class="progress">已確認 {{ progress.confirmed }} ／ 已否決 {{ progress.rejected }} ／ 待處理 {{ progress.pending }}</p>
-  <p class="hint">確認按鈕尚未實作，見 #5。卡號相同的卡會撈到同一批候選，需靠卡圖分辨。</p>
+  <p class="hint">卡號相同的卡會撈到同一批候選，靠卡圖分辨。撈不到對的就手動填 apparel id。</p>
+  <div id="error"></div>
+
   <div class="tblwrap">
     <table>
       <thead>
-        <tr><th>系列</th><th>卡號</th><th>卡名</th><th>正規化後</th><th>SNKRDUNK 候選</th></tr>
+        <tr><th>系列</th><th>卡號</th><th>卡名</th><th>正規化後</th><th>SNKRDUNK 候選</th><th>操作</th></tr>
       </thead>
       <tbody>
         {% for row in rows %}
@@ -52,18 +65,83 @@
                 <span class="code">{{ candidate.card_code }}</span>
                 <span>{{ candidate.name_en }}</span>
                 <span class="ja">{{ candidate.name_ja }}</span>
+                <button class="primary"
+                        onclick="confirmCard({{ row.id }}, {{ candidate.apparel_id }})">確認</button>
               </div>
               {% endfor %}
             </div>
             {% else %}
             <span class="none">查無候選</span>
             {% endif %}
+            <div class="manual">
+              <input type="number" id="manual-{{ row.id }}" placeholder="apparel id">
+              <button onclick="confirmManual({{ row.id }})">用這個 id 確認</button>
+            </div>
+          </td>
+          <td class="actions">
+            <button class="danger" onclick="rejectRow({{ row.id }})">都不是</button>
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  {% if cards %}
+  <h2>已確認的卡種（{{ cards | length }}）</h2>
+  <div class="tblwrap">
+    <table>
+      <thead>
+        <tr><th>Notion 寫法</th><th>apparel id</th><th>productCatalogId</th><th>卡種代碼</th><th>卡名</th><th>操作</th></tr>
+      </thead>
+      <tbody>
+        {% for card in cards %}
+        <tr>
+          <td>{{ card.series_raw }} {{ card.number_raw }} {{ card.card_name_raw }}</td>
+          <td class="num">{{ card.apparel_id }}</td>
+          <td class="num">{{ card.product_catalog_id }}</td>
+          <td class="norm">{{ card.card_code }}</td>
+          <td>{{ card.name_ja }}</td>
+          <td class="actions">
+            <button class="danger" onclick="undoConfirm({{ card.mapping_candidate_id }})">推翻</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 </div>
+
+<script>
+  async function send(url, options) {
+    const box = document.getElementById("error");
+    box.style.display = "none";
+    const response = await fetch(url, options);
+    if (response.ok) { location.reload(); return; }
+    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    box.textContent = "失敗：" + (body.detail || response.status);
+    box.style.display = "block";
+  }
+  const asJson = (payload) => ({
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  function confirmCard(rowId, apparelId) {
+    send("/api/mapping/confirm", asJson({ mapping_candidate_id: rowId, apparel_id: apparelId }));
+  }
+  function confirmManual(rowId) {
+    const value = document.getElementById("manual-" + rowId).value;
+    if (!value) { return; }
+    confirmCard(rowId, Number(value));
+  }
+  function rejectRow(rowId) {
+    send("/api/mapping/reject", asJson({ mapping_candidate_id: rowId }));
+  }
+  function undoConfirm(rowId) {
+    send("/api/mapping/confirm/" + rowId, { method: "DELETE" });
+  }
+</script>
 </body>
 </html>
