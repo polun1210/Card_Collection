@@ -2,12 +2,14 @@
 
 import csv
 import io
+from collections.abc import Iterable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
+from .holdings import HoldingRepository, summarize
 from .images import IMAGE_MEDIA_TYPE, CardImageError
 from .mapping import DEFAULT_BATCH_SIZE, MappingService
 from .repository import MappingCandidateRepository
@@ -23,8 +25,13 @@ def get_mapping_service(request: Request) -> MappingService:
     return request.app.state.mapping_service
 
 
+def get_holdings(request: Request) -> HoldingRepository:
+    return request.app.state.holdings
+
+
 Repository = Annotated[MappingCandidateRepository, Depends(get_repository)]
 Mapping = Annotated[MappingService, Depends(get_mapping_service)]
+Holdings = Annotated[HoldingRepository, Depends(get_holdings)]
 
 
 EXPORT_COLUMNS = (
@@ -139,6 +146,71 @@ def export_mapping(repository: Repository) -> PlainTextResponse:
 @router.get("/api/mapping/progress")
 def read_progress(repository: Repository) -> dict[str, int]:
     return repository.progress()
+
+
+@router.get("/api/holdings")
+def read_holdings(holdings: Holdings) -> list[dict]:
+    return list(holdings.list_all())
+
+
+@router.get("/api/holdings/summary")
+def read_holdings_summary(holdings: Holdings) -> dict[str, int]:
+    return summarize(holdings.list_all())
+
+
+@router.get("/api/holdings/imports")
+def read_holding_imports(holdings: Holdings) -> list[dict]:
+    """這批資料何時、從哪個檔案匯入的。用來對帳。"""
+    return list(holdings.list_imports())
+
+
+@router.get("/api/cards/{apparel_id}/holdings")
+def read_card_holdings(
+    apparel_id: int, repository: Repository, holdings: Holdings
+) -> dict:
+    if repository.find_card(apparel_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="查無此卡種")
+    rows = holdings.list_for_apparel(apparel_id)
+    return {
+        "apparel_id": apparel_id,
+        "holdings": list(rows),
+        "summary": summarize(rows),
+    }
+
+
+@router.get("/holdings", response_class=HTMLResponse)
+def read_holdings_page(request: Request, holdings: Holdings) -> HTMLResponse:
+    rows = holdings.list_all()
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "holdings.html",
+        {
+            "kinds": _group_by_kind(rows),
+            "summary": summarize(rows),
+            "imports": holdings.list_imports(),
+        },
+    )
+
+
+def _group_by_kind(rows: Iterable[dict]) -> list[dict]:
+    """依卡種分組。清單本身已排序，所以同卡種的列必定相鄰。"""
+    grouped: dict[tuple[str, str, str], dict] = {}
+    for row in rows:
+        key = (row["series_raw"], row["number_raw"], row["card_name_raw"])
+        kind = grouped.setdefault(
+            key,
+            {
+                "series_raw": row["series_raw"],
+                "number_raw": row["number_raw"],
+                "card_name_raw": row["card_name_raw"],
+                "apparel_id": row["apparel_id"],
+                "holdings": [],
+            },
+        )
+        kind["holdings"].append(row)
+    for kind in grouped.values():
+        kind["summary"] = summarize(kind["holdings"])
+    return list(grouped.values())
 
 
 @router.get("/", response_class=HTMLResponse)

@@ -45,6 +45,17 @@ class MappingCandidateRepository:
         )
         self._connection.commit()
 
+    def ids_by_kind(self) -> dict[tuple[str, str, str], int]:
+        """卡種原始三元組 → 卡種列 id，含已確認、已否決與待處理的列。"""
+        rows = self._connection.execute(
+            "SELECT id, series_raw, number_raw, card_name_raw "
+            "FROM card_mapping_candidate"
+        )
+        return {
+            (row["series_raw"], row["number_raw"], row["card_name_raw"]): row["id"]
+            for row in rows
+        }
+
     def list_pending(self, limit: int | None = None) -> tuple[dict, ...]:
         return tuple(
             self.with_candidates(row)

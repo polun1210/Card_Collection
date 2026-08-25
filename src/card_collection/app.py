@@ -12,6 +12,8 @@ from fastapi.templating import Jinja2Templates
 
 from .api import router
 from .db import connect, create_schema
+from .holding_import import HoldingImportService
+from .holdings import HoldingRepository
 from .images import CardImageError, CardImageStore
 from .mapping import MappingService
 from .notion_csv import read_card_kinds
@@ -40,6 +42,10 @@ def create_app(
         create_schema(connection)
         repository = MappingCandidateRepository(connection)
         repository.seed(read_card_kinds(csv_path))
+        holdings = HoldingRepository(connection)
+        # 匯入不合格就讓服務起不來。訊息指出是哪一列，改完 CSV 重啟即可——
+        # 帶著半份持有品把服務跑起來，比起不來更糟。
+        HoldingImportService(holdings, repository).import_once(csv_path)
 
         http_client = httpx.Client(
             headers={"User-Agent": USER_AGENT},
@@ -48,6 +54,7 @@ def create_app(
             transport=transport,
         )
         app.state.repository = repository
+        app.state.holdings = holdings
         app.state.mapping_service = MappingService(
             repository,
             SnkrdunkClient(http_client, sleep=sleep, request_interval=request_interval),

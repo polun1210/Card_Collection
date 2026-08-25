@@ -1,3 +1,4 @@
+import csv
 import gzip
 import json
 from pathlib import Path
@@ -101,11 +102,14 @@ def snkrdunk() -> RecordedSnkrdunk:
 
 @pytest.fixture
 def client_factory(tmp_path: Path, snkrdunk: RecordedSnkrdunk):
-    """同一組暫存資料庫與卡圖目錄，可重複建立 app——用來驗證重啟後的狀態。"""
+    """同一組暫存資料庫與卡圖目錄，可重複建立 app——用來驗證重啟後的狀態。
 
-    def make() -> TestClient:
+    可指定自己的 CSV，用來驗證不合格來源資料的匯入行為。
+    """
+
+    def make(csv_path: Path = NOTION_CSV) -> TestClient:
         app = create_app(
-            csv_path=NOTION_CSV,
+            csv_path=csv_path,
             db_path=tmp_path / "card_collection.db",
             images_dir=tmp_path / "images",
             transport=httpx.MockTransport(snkrdunk.handler),
@@ -114,6 +118,34 @@ def client_factory(tmp_path: Path, snkrdunk: RecordedSnkrdunk):
         return TestClient(app)
 
     return make
+
+
+NOTION_COLUMNS = (
+    "card name",
+    "card num",
+    "cost",
+    "grading score",
+    "purchase date",
+    "set name",
+    "sold date",
+    "sold price",
+)
+
+
+@pytest.fixture
+def write_notion_csv(tmp_path: Path):
+    """寫一份欄位與 Notion 匯出相同的 CSV，只是內容由測試指定。"""
+
+    def write(*holdings: dict[str, str]) -> Path:
+        path = tmp_path / "custom.csv"
+        with path.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=NOTION_COLUMNS)
+            writer.writeheader()
+            for holding in holdings:
+                writer.writerow({column: "" for column in NOTION_COLUMNS} | holding)
+        return path
+
+    return write
 
 
 @pytest.fixture

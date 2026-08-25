@@ -42,6 +42,32 @@ CREATE TABLE IF NOT EXISTS card (
     confirmed_at         TEXT NOT NULL,
     image_local_path     TEXT
 );
+
+-- 持有品掛在卡種列上，不掛在已確認的卡種主檔上：推翻確認會刪掉主檔那一列，
+-- 但你手上的實體卡不會因此消失。
+CREATE TABLE IF NOT EXISTS holding (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    mapping_candidate_id INTEGER NOT NULL REFERENCES card_mapping_candidate(id),
+    purchase_date        TEXT NOT NULL,
+    purchase_date_raw    TEXT NOT NULL,
+    cost_twd             INTEGER NOT NULL,
+    sold_date            TEXT,
+    sold_date_raw        TEXT,
+    sold_price_twd       INTEGER,
+    grading_raw          TEXT NOT NULL,
+    source_row_number    INTEGER,
+    created_at           TEXT NOT NULL
+);
+
+-- 匯入帳本：只要有一筆完成紀錄就不再匯入。CSV 是一次性的歷史補登入口，
+-- 之後的真實來源是 CRUD——每次啟動重新對齊 CSV 會讓刪掉的持有品復活。
+CREATE TABLE IF NOT EXISTS holding_import (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_path          TEXT NOT NULL,
+    source_fingerprint   TEXT NOT NULL,
+    row_count            INTEGER NOT NULL,
+    imported_at          TEXT NOT NULL
+);
 """
 
 # 尚未引入 Alembic（見 #1 規格）。在那之前，缺欄位就補上——只加不改。

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>持有品</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: "Noto Sans TC", system-ui, sans-serif; margin: 0; padding: 2rem 1.5rem 4rem; line-height: 1.6; }
+  .wrap { max-width: 72rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 .3rem; }
+  .totals { display: flex; flex-wrap: wrap; gap: 2.5rem; margin: 1.2rem 0 .6rem; }
+  .total .label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; display: block; }
+  .total .value { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .value.up { color: #0b7a4b; }
+  .value.down { color: #b91c1c; }
+  .hint { color: #6b7280; font-size: .9rem; margin: 0 0 1.5rem; }
+  .toolbar { display: flex; align-items: baseline; gap: 1rem; margin: 2rem 0 .8rem; }
+  .toolbar h2 { font-size: 1.1rem; margin: 0; }
+  .toolbar a { font-size: .84rem; }
+  .tblwrap { overflow-x: auto; border: 1px solid #d1d5db; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; min-width: 52rem; font-size: .92rem; }
+  th, td { padding: .55rem .9rem; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  thead th { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+  th.num { text-align: right; }
+  .thumb { width: 3.6rem; aspect-ratio: 10/7; object-fit: contain; background: #f3f4f6; border-radius: 3px; }
+  .noimg { display: inline-block; width: 3.6rem; aspect-ratio: 10/7; background: #f3f4f6; border-radius: 3px; }
+  .kind { white-space: nowrap; }
+  .kind .code { font-family: ui-monospace, monospace; color: #6b7280; font-size: .78rem; display: block; }
+  .lots { font-size: .82rem; color: #4b5563; margin: 0; padding: 0; list-style: none; }
+  .lots li { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lots .sold { color: #6b7280; }
+  .none { color: #9ca3af; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>持有品</h1>
+
+  <div class="totals">
+    <div class="total">
+      <span class="label">持有中</span>
+      <span class="value">{{ summary.held_count }} 張</span>
+    </div>
+    <div class="total">
+      <span class="label">持有中總成本</span>
+      <span class="value">{{ "{:,}".format(summary.held_cost_twd) }}</span>
+    </div>
+    <div class="total">
+      <span class="label">已售出</span>
+      <span class="value">{{ summary.sold_count }} 張</span>
+    </div>
+    <div class="total">
+      <span class="label">已實現損益</span>
+      <span class="value {{ 'up' if summary.realized_pnl_twd > 0 else 'down' if summary.realized_pnl_twd < 0 else '' }}">{{ "{:,}".format(summary.realized_pnl_twd) }}</span>
+    </div>
+  </div>
+  <p class="hint">金額一律新台幣。持有中的卡只列購入成本——市值尚未接上，這裡不會有未實現損益。</p>
+
+  <div class="toolbar">
+    <h2>依卡種</h2>
+    <a href="/">回卡種對應</a>
+  </div>
+
+  <div class="tblwrap">
+    <table>
+      <thead>
+        <tr>
+          <th>卡圖</th><th>卡種</th>
+          <th class="num">持有中</th><th class="num">持有成本</th>
+          <th class="num">已售出</th><th class="num">已實現損益</th>
+          <th>每一張</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for kind in kinds %}
+        <tr>
+          <td>
+            {% if kind.apparel_id %}
+              <img class="thumb" src="/api/cards/{{ kind.apparel_id }}/image" alt="">
+            {% else %}
+              <span class="noimg"></span>
+            {% endif %}
+          </td>
+          <td class="kind">
+            {{ kind.card_name_raw }}
+            <span class="code">{{ kind.series_raw }} #{{ kind.number_raw }}</span>
+          </td>
+          <td class="num">{{ kind.summary.held_count }}</td>
+          <td class="num">{{ "{:,}".format(kind.summary.held_cost_twd) }}</td>
+          <td class="num">{{ kind.summary.sold_count }}</td>
+          <td class="num">
+            {% if kind.summary.sold_count %}
+              {{ "{:,}".format(kind.summary.realized_pnl_twd) }}
+            {% else %}
+              <span class="none">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <ul class="lots">
+              {% for holding in kind.holdings %}
+              <li{% if holding.status == 'sold' %} class="sold"{% endif %}>
+                {{ holding.purchase_date }} 購入 {{ "{:,}".format(holding.cost_twd) }}
+                {%- if holding.status == 'sold' %}
+                  → {{ holding.sold_date }} 售出 {{ "{:,}".format(holding.sold_price_twd) }}
+                  （{{ "{:+,}".format(holding.realized_pnl_twd) }}，{{ "{:+.1%}".format(holding.return_rate) }}）
+                {%- endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% for record in imports %}
+  <p class="hint">匯入來源：{{ record.source_path }}／{{ record.row_count }} 筆／{{ record.imported_at }}</p>
+  {% endfor %}
+</div>
+</body>
+</html>
