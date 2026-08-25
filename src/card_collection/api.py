@@ -1,11 +1,14 @@
 """HTTP API 與待確認清單頁面。"""
 
+import csv
+import io
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
+from .images import IMAGE_MEDIA_TYPE, CardImageError
 from .mapping import DEFAULT_BATCH_SIZE, MappingService
 from .repository import MappingCandidateRepository
 
@@ -22,6 +25,19 @@ def get_mapping_service(request: Request) -> MappingService:
 
 Repository = Annotated[MappingCandidateRepository, Depends(get_repository)]
 Mapping = Annotated[MappingService, Depends(get_mapping_service)]
+
+
+EXPORT_COLUMNS = (
+    "series_raw",
+    "number_raw",
+    "card_name_raw",
+    "apparel_id",
+    "product_catalog_id",
+    "card_code",
+    "name_en",
+    "name_ja",
+    "image_local_path",
+)
 
 
 class ConfirmRequest(BaseModel):
@@ -89,6 +105,35 @@ def read_card(apparel_id: int, repository: Repository) -> dict:
     if card is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="查無此卡種")
     return card
+
+
+@router.post("/api/cards/{apparel_id}/image")
+def store_card_image(apparel_id: int, mapping: Mapping) -> dict:
+    """補抓確認當下沒拉到的卡圖。不需要推翻確認。"""
+    return {"image_local_path": mapping.store_card_image(apparel_id)}
+
+
+@router.get("/api/cards/{apparel_id}/image")
+def read_card_image(apparel_id: int, repository: Repository) -> FileResponse:
+    card = repository.find_card(apparel_id)
+    if card is None or not card["image_local_path"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="查無卡圖")
+    return FileResponse(card["image_local_path"], media_type=IMAGE_MEDIA_TYPE)
+
+
+@router.get("/api/mapping/export.csv", response_class=PlainTextResponse)
+def export_mapping(repository: Repository) -> PlainTextResponse:
+    """可離線核對的對照清單。"""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(EXPORT_COLUMNS)
+    for card in repository.list_cards():
+        writer.writerow([card[column] for column in EXPORT_COLUMNS])
+    return PlainTextResponse(
+        buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="card-mapping.csv"'},
+    )
 
 
 @router.get("/api/mapping/progress")

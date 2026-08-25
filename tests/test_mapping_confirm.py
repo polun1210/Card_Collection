@@ -166,30 +166,13 @@ def test_進度隨確認否決推翻正確變動(client):
     }
 
 
-def test_重啟服務後進度與卡種主檔不變(tmp_path, notion_csv, snkrdunk):
-    # Arrange
-    import httpx
-    from fastapi.testclient import TestClient
-
-    from card_collection.app import create_app
-
-    db_path = tmp_path / "card_collection.db"
-
-    def make_client():
-        app = create_app(
-            csv_path=notion_csv,
-            db_path=db_path,
-            transport=httpx.MockTransport(snkrdunk.handler),
-            sleep=snkrdunk.sleep,
-        )
-        return TestClient(app)
-
+def test_重啟服務後進度與卡種主檔不變(client_factory):
     # Act
-    with make_client() as client:
+    with client_factory() as client:
         row = _find(client, "M2a", "228", "MEGA Lucario")
         _confirm(client, row["id"], MEGA_LUCARIO[0])
 
-    with make_client() as client:
+    with client_factory() as client:
         # Assert
         assert client.get("/api/mapping/progress").json()["confirmed"] == 1
         card = client.get(f"/api/cards/{MEGA_LUCARIO[0]}").json()

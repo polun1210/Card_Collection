@@ -35,6 +35,11 @@
   .manual input { font: inherit; font-size: .78rem; width: 7rem; padding: .25rem .4rem;
                   border: 1px solid #9ca3af; border-radius: 3px; }
   .actions { white-space: nowrap; }
+  .thumb { width: 3.6rem; aspect-ratio: 10/7; object-fit: contain; background: #f3f4f6; border-radius: 3px; }
+  .missing { color: #9a6206; font-size: .76rem; }
+  .toolbar { display: flex; align-items: baseline; gap: 1rem; margin: 2.5rem 0 .8rem; }
+  .toolbar h2 { margin: 0; }
+  .toolbar a { font-size: .84rem; }
 </style>
 </head>
 <body>
@@ -88,21 +93,34 @@
   </div>
 
   {% if cards %}
-  <h2>已確認的卡種（{{ cards | length }}）</h2>
+  <div class="toolbar">
+    <h2>已確認的卡種（{{ cards | length }}）</h2>
+    <a href="/api/mapping/export.csv" download>下載對照清單 CSV</a>
+  </div>
   <div class="tblwrap">
     <table>
       <thead>
-        <tr><th>Notion 寫法</th><th>apparel id</th><th>productCatalogId</th><th>卡種代碼</th><th>卡名</th><th>操作</th></tr>
+        <tr><th>卡圖</th><th>Notion 寫法</th><th>apparel id</th><th>productCatalogId</th><th>卡種代碼</th><th>卡名</th><th>操作</th></tr>
       </thead>
       <tbody>
         {% for card in cards %}
         <tr>
+          <td>
+            {% if card.image_local_path %}
+            <img class="thumb" src="/api/cards/{{ card.apparel_id }}/image" alt="{{ card.name_ja }}" loading="lazy">
+            {% else %}
+            <span class="missing">卡圖缺失</span>
+            {% endif %}
+          </td>
           <td>{{ card.series_raw }} {{ card.number_raw }} {{ card.card_name_raw }}</td>
           <td class="num">{{ card.apparel_id }}</td>
           <td class="num">{{ card.product_catalog_id }}</td>
           <td class="norm">{{ card.card_code }}</td>
           <td>{{ card.name_ja }}</td>
           <td class="actions">
+            {% if not card.image_local_path %}
+            <button onclick="refetchImage({{ card.apparel_id }})">補圖</button>
+            {% endif %}
             <button class="danger" onclick="undoConfirm({{ card.mapping_candidate_id }})">推翻</button>
           </td>
         </tr>
@@ -138,6 +156,9 @@
   }
   function rejectRow(rowId) {
     send("/api/mapping/reject", asJson({ mapping_candidate_id: rowId }));
+  }
+  function refetchImage(apparelId) {
+    send("/api/cards/" + apparelId + "/image", { method: "POST" });
   }
   function undoConfirm(rowId) {
     send("/api/mapping/confirm/" + rowId, { method: "DELETE" });

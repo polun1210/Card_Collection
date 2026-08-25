@@ -165,6 +165,13 @@ class MappingCandidateRepository:
             )
         return True
 
+    def record_card_image(self, apparel_id: int, image_path: str) -> None:
+        with self._connection:
+            self._connection.execute(
+                "UPDATE card SET image_local_path = ? WHERE apparel_id = ?",
+                (image_path, apparel_id),
+            )
+
     def find_card(self, apparel_id: int) -> dict | None:
         row = self._connection.execute(
             "SELECT * FROM card WHERE apparel_id = ?", (apparel_id,)

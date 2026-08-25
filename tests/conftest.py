@@ -30,7 +30,22 @@ class RecordedSnkrdunk:
         self.raise_network_error = False
         self.strip_card_image = False
         self.strip_product_catalog_id = False
+        self.image_download_fails = False
+        self.image_is_corrupt = False
         self.sleeps: list[float] = []
+        self._image_owner: dict[str, int] | None = None
+
+    @property
+    def image_owner(self) -> dict[str, int]:
+        """卡圖網址 → apparel id，由錄下的卡種回應反查。"""
+        if self._image_owner is None:
+            self._image_owner = {}
+            for path in FIXTURES.glob("apparel_*.json"):
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                media = payload.get("primaryMedia") or {}
+                if media.get("imageUrl"):
+                    self._image_owner[media["imageUrl"]] = payload["id"]
+        return self._image_owner
 
     def sleep(self, seconds: float) -> None:
         self.sleeps.append(seconds)
@@ -41,6 +56,18 @@ class RecordedSnkrdunk:
             raise httpx.ConnectError("連線中斷", request=request)
         if self.forced_status is not None:
             return httpx.Response(self.forced_status, text="boom")
+        if request.url.host == "cdn.snkrdunk.com":
+            if self.image_download_fails:
+                return httpx.Response(503, text="cdn down")
+            if self.image_is_corrupt:
+                return httpx.Response(200, content=b"not an image at all")
+            apparel_id = self.image_owner.get(str(request.url))
+            path = FIXTURES / f"image_{apparel_id}.webp"
+            if apparel_id is None or not path.exists():
+                return httpx.Response(404, text="unrecorded image")
+            return httpx.Response(
+                200, content=path.read_bytes(), headers={"Content-Type": "image/webp"}
+            )
         if request.url.path == "/search":
             keywords = request.url.params.get("keywords", "")
             path = FIXTURES / f"search_{_slug(keywords)}.html.gz"
@@ -73,13 +100,24 @@ def snkrdunk() -> RecordedSnkrdunk:
 
 
 @pytest.fixture
-def client(tmp_path: Path, snkrdunk: RecordedSnkrdunk):
+def client_factory(tmp_path: Path, snkrdunk: RecordedSnkrdunk):
+    """同一組暫存資料庫與卡圖目錄，可重複建立 app——用來驗證重啟後的狀態。"""
+
+    def make() -> TestClient:
+        app = create_app(
+            csv_path=NOTION_CSV,
+            db_path=tmp_path / "card_collection.db",
+            images_dir=tmp_path / "images",
+            transport=httpx.MockTransport(snkrdunk.handler),
+            sleep=snkrdunk.sleep,
+        )
+        return TestClient(app)
+
+    return make
+
+
+@pytest.fixture
+def client(client_factory):
     """真實的暫存 SQLite，不模擬；外部 HTTP 在傳輸層回放錄下的回應。"""
-    app = create_app(
-        csv_path=NOTION_CSV,
-        db_path=tmp_path / "card_collection.db",
-        transport=httpx.MockTransport(snkrdunk.handler),
-        sleep=snkrdunk.sleep,
-    )
-    with TestClient(app) as test_client:
+    with client_factory() as test_client:
         yield test_client

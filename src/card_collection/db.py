@@ -39,13 +39,15 @@ CREATE TABLE IF NOT EXISTS card (
     card_name_raw        TEXT NOT NULL,
     mapping_candidate_id INTEGER NOT NULL UNIQUE
                          REFERENCES card_mapping_candidate(id),
-    confirmed_at         TEXT NOT NULL
+    confirmed_at         TEXT NOT NULL,
+    image_local_path     TEXT
 );
 """
 
 # 尚未引入 Alembic（見 #1 規格）。在那之前，缺欄位就補上——只加不改。
 _ADDED_COLUMNS = (
     ("card_mapping_candidate", "candidates_fetched_at", "TEXT"),
+    ("card", "image_local_path", "TEXT"),
 )
 
 

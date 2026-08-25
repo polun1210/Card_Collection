@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from .api import router
 from .db import connect, create_schema
+from .images import CardImageError, CardImageStore
 from .mapping import MappingService
 from .notion_csv import read_card_kinds
 from .repository import MappingCandidateRepository
@@ -28,6 +29,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 def create_app(
     csv_path: Path,
     db_path: Path,
+    images_dir: Path,
     transport: httpx.BaseTransport | None = None,
     sleep: Callable[[float], None] = time.sleep,
     request_interval: float = DEFAULT_REQUEST_INTERVAL_SECONDS,
@@ -49,6 +51,7 @@ def create_app(
         app.state.mapping_service = MappingService(
             repository,
             SnkrdunkClient(http_client, sleep=sleep, request_interval=request_interval),
+            CardImageStore(images_dir),
         )
         yield
         http_client.close()
@@ -57,6 +60,12 @@ def create_app(
     app = FastAPI(title="Card Collection", lifespan=lifespan)
     app.state.templates = Jinja2Templates(directory=TEMPLATES_DIR)
     app.include_router(router)
+
+    @app.exception_handler(CardImageError)
+    async def _card_image_failed(request: Request, error: CardImageError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY, content={"detail": str(error)}
+        )
 
     @app.exception_handler(SnkrdunkError)
     async def _snkrdunk_failed(request: Request, error: SnkrdunkError) -> JSONResponse:

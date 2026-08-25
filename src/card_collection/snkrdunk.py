@@ -87,14 +87,21 @@ class SnkrdunkClient:
             product_catalog_id=payload.get("productCatalogId"),
         )
 
+    def download(self, url: str) -> bytes:
+        """下載 CDN 上的卡圖。網址是絕對路徑，不掛在 snkrdunk.com 底下。"""
+        return self._request(url).content
+
     def _get(self, path: str, **kwargs) -> httpx.Response:
+        return self._request(BASE_URL + path, **kwargs)
+
+    def _request(self, url: str, **kwargs) -> httpx.Response:
         if self._has_requested:
             self._sleep(self._request_interval)
         self._has_requested = True
         try:
-            response = self._client.get(BASE_URL + path, **kwargs)
+            response = self._client.get(url, **kwargs)
         except httpx.HTTPError as error:
-            raise SnkrdunkError(f"SNKRDUNK 請求失敗：{path}") from error
+            raise SnkrdunkError(f"SNKRDUNK 請求失敗：{url}") from error
         if response.status_code != httpx.codes.OK:
-            raise SnkrdunkError(f"SNKRDUNK 回應 {response.status_code}：{path}")
+            raise SnkrdunkError(f"SNKRDUNK 回應 {response.status_code}：{url}")
         return response

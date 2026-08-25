@@ -108,18 +108,10 @@ def test_limit_參數只取回一批(client):
     assert len(response.json()) == 5
 
 
-def test_重複啟動不會重複匯入(tmp_path: Path, notion_csv: Path):
-    # Arrange
-    from fastapi.testclient import TestClient
-
-    from card_collection.app import create_app
-
-    db_path = tmp_path / "card_collection.db"
-
+def test_重複啟動不會重複匯入(client_factory):
     # Act：同一個資料庫啟動兩次
     for _ in range(2):
-        app = create_app(csv_path=notion_csv, db_path=db_path)
-        with TestClient(app) as client:
+        with client_factory() as client:
             rows = client.get("/api/mapping/queue").json()
 
     # Assert

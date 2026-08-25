@@ -1,5 +1,6 @@
 """待確認卡種與 SNKRDUNK 候選之間的協調。"""
 
+from .images import CardImageError, CardImageStore
 from .repository import MappingCandidateRepository
 from .snkrdunk import SnkrdunkClient, SnkrdunkError
 
@@ -9,10 +10,14 @@ DEFAULT_BATCH_SIZE = 20
 
 class MappingService:
     def __init__(
-        self, repository: MappingCandidateRepository, snkrdunk: SnkrdunkClient
+        self,
+        repository: MappingCandidateRepository,
+        snkrdunk: SnkrdunkClient,
+        images: CardImageStore,
     ) -> None:
         self._repository = repository
         self._snkrdunk = snkrdunk
+        self._images = images
 
     def fetch_candidates(self, mapping_candidate_id: int) -> None:
         """為單一列向 SNKRDUNK 取候選。已取過的不再取。"""
@@ -49,3 +54,18 @@ class MappingService:
                 f"SNKRDUNK 的 apparel {apparel_id} 沒有 productCatalogId，無法確認"
             )
         self._repository.confirm(row, apparel)
+        try:
+            self.store_card_image(apparel.apparel_id)
+        except (SnkrdunkError, CardImageError):
+            # 卡圖是裝飾，productCatalogId 才是命脈。一張圖沒拉下來不該
+            # 逼使用者重新確認一次——留著缺失標記，事後補即可。
+            pass
+
+    def store_card_image(self, apparel_id: int) -> str:
+        card = self._repository.find_card(apparel_id)
+        if card is None:
+            raise CardImageError(f"卡種主檔沒有 apparel {apparel_id}")
+        data = self._snkrdunk.download(card["image_url"])
+        path = self._images.save(apparel_id, data)
+        self._repository.record_card_image(apparel_id, str(path))
+        return str(path)
