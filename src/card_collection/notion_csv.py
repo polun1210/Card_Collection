@@ -6,16 +6,23 @@ CSV 的一列是一筆持有品，不是一個卡種。卡種唯一鍵為系列�
 
 import csv
 from dataclasses import dataclass
-from datetime import date, datetime
 from pathlib import Path
 
+from .holding_rules import (
+    HoldingRuleError,
+    check_sold_not_before_purchase,
+    check_sold_pair,
+    parse_amount,
+    parse_date,
+)
 from .normalization import normalize_card_number, normalize_series
-
-DATE_FORMATS = ("%Y/%m/%d", "%Y-%m-%d")
 
 
 class HoldingImportError(ValueError):
-    """來源資料不合格。訊息一律指出來源列號與該列的卡種寫法。"""
+    """來源資料不合格。訊息一律指出來源列號與該列的卡種寫法。
+
+    欄位規則本身住在 `holding_rules`，與 CRUD 共用；這裡只負責把「哪一列」接上去。
+    """
 
 
 @dataclass(frozen=True)
@@ -85,12 +92,25 @@ def _to_card_kind(holding: dict[str, str]) -> CardKind:
 
 
 def _to_holding_row(holding: dict[str, str], row_number: int) -> HoldingRow:
-    where = _where(holding, row_number)
+    """規則不合格時，補上是哪一列出的問題再往上丟。
+
+    規則自己不知道它被誰用，所以它給的是一句單獨讀得懂的話；來源列號只有這裡知道。
+    """
+    try:
+        return _build_holding_row(holding, row_number)
+    except HoldingRuleError as error:
+        raise HoldingImportError(f"{_where(holding, row_number)}：{error}") from error
+
+
+def _build_holding_row(holding: dict[str, str], row_number: int) -> HoldingRow:
     purchase_date_raw = holding["purchase date"].strip()
-    purchase_date = _parse_date(purchase_date_raw, "購入日", where)
+    purchase_date = parse_date(purchase_date_raw, "購入日")
     sold_date_raw = holding["sold date"].strip()
     sold_price_raw = holding["sold price"].strip()
-    sold_date = _parse_sold_date(sold_date_raw, sold_price_raw, purchase_date, where)
+    check_sold_pair(sold_date_raw or None, sold_price_raw or None)
+    sold_date = parse_date(sold_date_raw, "售出日") if sold_date_raw else None
+    if sold_date is not None:
+        check_sold_not_before_purchase(sold_date, purchase_date)
     return HoldingRow(
         source_row_number=row_number,
         series_raw=holding["set name"],
@@ -98,51 +118,14 @@ def _to_holding_row(holding: dict[str, str], row_number: int) -> HoldingRow:
         card_name_raw=holding["card name"],
         purchase_date=purchase_date.isoformat(),
         purchase_date_raw=purchase_date_raw,
-        cost_twd=_parse_amount(holding["cost"].strip(), "購入成本", where),
+        cost_twd=parse_amount(holding["cost"].strip(), "購入成本"),
         sold_date=sold_date.isoformat() if sold_date else None,
         sold_date_raw=sold_date_raw or None,
         sold_price_twd=(
-            _parse_amount(sold_price_raw, "售出價", where) if sold_date else None
+            parse_amount(sold_price_raw, "售出價") if sold_date else None
         ),
         grading_raw=holding["grading score"],
     )
-
-
-def _parse_sold_date(
-    sold_date_raw: str, sold_price_raw: str, purchase_date: date, where: str
-) -> date | None:
-    """持有中／已售出一律看售出日是否有值，不看售出價（ADR-0009）。"""
-    if not sold_date_raw and not sold_price_raw:
-        return None
-    if not sold_price_raw:
-        raise HoldingImportError(f"{where}有售出日卻沒有售出價")
-    if not sold_date_raw:
-        raise HoldingImportError(f"{where}有售出價卻沒有售出日")
-    sold_date = _parse_date(sold_date_raw, "售出日", where)
-    if sold_date < purchase_date:
-        raise HoldingImportError(
-            f"{where}的售出日 {sold_date.isoformat()} "
-            f"早於購入日 {purchase_date.isoformat()}"
-        )
-    return sold_date
-
-
-def _parse_date(value: str, label: str, where: str) -> date:
-    if not value:
-        raise HoldingImportError(f"{where}沒有{label}")
-    for date_format in DATE_FORMATS:
-        try:
-            return datetime.strptime(value, date_format).date()
-        except ValueError:
-            continue
-    raise HoldingImportError(f"{where}的{label}「{value}」無法解析為日期")
-
-
-def _parse_amount(value: str, label: str, where: str) -> int:
-    """金額一律為新台幣正整數。0 與負數都不是合法的成本或售價。"""
-    if not value.isdigit() or int(value) <= 0:
-        raise HoldingImportError(f"{where}的{label}「{value}」不是正整數")
-    return int(value)
 
 
 def _where(holding: dict[str, str], row_number: int) -> str:
