@@ -6,3 +6,4 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CSV_PATH = REPO_ROOT / "data" / "notion-export" / "pokemon_project.csv"
 DEFAULT_DB_PATH = REPO_ROOT / "data" / "card_collection.db"
 DEFAULT_IMAGES_DIR = REPO_ROOT / "data" / "images"
+DEFAULT_LOG_DIR = REPO_ROOT / "data" / "logs"
