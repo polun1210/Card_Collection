@@ -9,3 +9,4 @@ htmlcov/
 data/logs/
 *.db-wal
 *.db-shm
+.worktrees/
