@@ -161,14 +161,26 @@ class MappingCandidateRepository:
             )
 
     def undo_confirm(self, mapping_candidate_id: int) -> bool:
-        """推翻確認：該列回到待處理，主檔中對應的卡種被移除。"""
+        """推翻確認：該列回到待處理，主檔中對應的卡種與其成交紀錄一併移除。
+
+        成交紀錄跟著走是刻意的——它是依這份對應關係抓來的，對應被推翻就代表那些
+        行情抓錯了卡。三件事同一個交易，不留「卡種沒了、行情還在」的半成品。
+        持有品不在此列：它掛在卡種列上，你手上的實體卡不會因為重對而消失。
+        """
         with self._connection:
-            deleted = self._connection.execute(
+            row = self._connection.execute(
+                "SELECT apparel_id FROM card WHERE mapping_candidate_id = ?",
+                (mapping_candidate_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            self._connection.execute(
+                "DELETE FROM sale WHERE apparel_id = ?", (row["apparel_id"],)
+            )
+            self._connection.execute(
                 "DELETE FROM card WHERE mapping_candidate_id = ?",
                 (mapping_candidate_id,),
-            ).rowcount
-            if not deleted:
-                return False
+            )
             self._connection.execute(
                 "UPDATE card_mapping_candidate "
                 "SET status = ?, confirmed_apparel_id = NULL WHERE id = ?",
@@ -192,6 +204,15 @@ class MappingCandidateRepository:
     def list_cards(self) -> tuple[dict, ...]:
         rows = self._connection.execute(
             "SELECT * FROM card ORDER BY series_raw, number_raw, card_name_raw"
+        ).fetchall()
+        return tuple(dict(row) for row in rows)
+
+    def list_unconfirmed(self) -> tuple[dict, ...]:
+        """還沒對應到 SNKRDUNK 的卡種。爬取跑不到它們，結果裡要明確列為跳過。"""
+        rows = self._connection.execute(
+            "SELECT id, series_raw, number_raw, card_name_raw, status "
+            f"FROM card_mapping_candidate WHERE status != ? {_STABLE_ORDER}",
+            (STATUS_CONFIRMED,),
         ).fetchall()
         return tuple(dict(row) for row in rows)
 

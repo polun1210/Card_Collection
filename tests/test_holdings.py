@@ -217,6 +217,13 @@ def test_全站統計含持有成本與已實現損益合計(client):
         "sold_count": SOLD_COUNT,
         "held_cost_twd": HELD_COST_TWD,
         "realized_pnl_twd": REALIZED_PNL_TWD,
+        # 還沒爬過行情，89 張全部沒有市值。市值相關的合計一律附上涵蓋張數，
+        # 否則 0 會被讀成「不賺不賠」而不是「還沒有資料」。
+        "valued_count": 0,
+        "unvalued_count": HELD_COUNT,
+        "held_cost_valued_twd": 0,
+        "held_market_value_twd": 0,
+        "unrealized_pnl_twd": 0,
     }
 
 
@@ -249,6 +256,11 @@ def test_單一卡種的持有品與統計(client):
         "sold_count": 0,
         "held_cost_twd": 2400 + 2600 + 2650,
         "realized_pnl_twd": 0,
+        "valued_count": 0,
+        "unvalued_count": 3,
+        "held_cost_valued_twd": 0,
+        "held_market_value_twd": 0,
+        "unrealized_pnl_twd": 0,
     }
 
 

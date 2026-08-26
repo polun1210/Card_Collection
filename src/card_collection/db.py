@@ -61,6 +61,48 @@ CREATE TABLE IF NOT EXISTS holding (
 
 -- 匯入帳本：只要有一筆完成紀錄就不再匯入。CSV 是一次性的歷史補登入口，
 -- 之後的真實來源是 CRUD——每次啟動重新對齊 CSV 會讓刪掉的持有品復活。
+-- 成交紀錄掛在已確認的卡種主檔上：行情是對應關係的衍生物，對應被推翻，
+-- 依它抓來的行情就不該留著。
+CREATE TABLE IF NOT EXISTS sale (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    apparel_id           INTEGER NOT NULL REFERENCES card(apparel_id),
+    sold_at_raw          TEXT NOT NULL,
+    sold_date_jst        TEXT NOT NULL,
+    price_jpy            INTEGER NOT NULL,
+    condition_raw        TEXT NOT NULL,
+    variant_raw          TEXT NOT NULL,
+    -- 完全相同的成交（同秒、同價、同枚数）確實存在，實測有一組五筆。
+    -- 唯一鍵不含序號的話，五筆真實成交會被去重成一筆。
+    duplicate_index      INTEGER NOT NULL,
+    price_twd            INTEGER,
+    fx_rate              REAL,
+    fx_rate_date         TEXT,
+    fx_source            TEXT,
+    status               TEXT NOT NULL,
+    quarantine_reason    TEXT,
+    fetched_at           TEXT NOT NULL,
+    UNIQUE (apparel_id, sold_at_raw, price_jpy, variant_raw, duplicate_index)
+);
+
+-- 匯率一經寫入即固定，永不以今日匯率回頭重算歷史（ADR-0006）。
+-- 來源與實際牌告日一起存，日後換來源時分辨得出哪些數字來自哪裡。
+CREATE TABLE IF NOT EXISTS fx_rate (
+    rate_date            TEXT PRIMARY KEY,
+    rate                 REAL NOT NULL,
+    source               TEXT NOT NULL,
+    fetched_at           TEXT NOT NULL
+);
+
+-- 抓取帳本：已經抓過的日期不重抓。來源是一份六個月的整包 CSV，
+-- 所以「抓過到哪一天」就足以決定下一次要不要再打這個請求。
+CREATE TABLE IF NOT EXISTS fx_fetch (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    requested_through    TEXT NOT NULL,
+    source               TEXT NOT NULL,
+    row_count            INTEGER NOT NULL,
+    fetched_at           TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS holding_import (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
     source_path          TEXT NOT NULL,

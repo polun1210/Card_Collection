@@ -3,6 +3,7 @@
 import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -12,12 +13,15 @@ from fastapi.templating import Jinja2Templates
 
 from .api import router
 from .db import connect, create_schema
+from .fx import BotRateDownload, FxRateRepository, FxRateService
 from .holding_import import HoldingImportService
 from .holdings import HoldingRepository
 from .images import CardImageError, CardImageStore
 from .mapping import MappingService
+from .market import MarketService
 from .notion_csv import read_card_kinds
 from .repository import MappingCandidateRepository
+from .sales import SaleRepository
 from .snkrdunk import (
     DEFAULT_REQUEST_INTERVAL_SECONDS,
     USER_AGENT,
@@ -35,7 +39,11 @@ def create_app(
     transport: httpx.BaseTransport | None = None,
     sleep: Callable[[float], None] = time.sleep,
     request_interval: float = DEFAULT_REQUEST_INTERVAL_SECONDS,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    fx_download: Callable[[], bytes] | None = None,
 ) -> FastAPI:
+    """匯率不走 httpx：臺銀需要模擬 Chrome 的 TLS 指紋，那是另一套 HTTP 堆疊，
+    所以它的測試接縫在下載器本身，不在 httpx 的傳輸層（ADR-0017）。"""
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         connection = connect(db_path)
@@ -53,12 +61,25 @@ def create_app(
             follow_redirects=True,
             transport=transport,
         )
+        snkrdunk = SnkrdunkClient(
+            http_client, sleep=sleep, request_interval=request_interval
+        )
+        sales = SaleRepository(connection)
         app.state.repository = repository
         app.state.holdings = holdings
+        app.state.clock = clock
         app.state.mapping_service = MappingService(
+            repository, snkrdunk, CardImageStore(images_dir)
+        )
+        # 行情不掛在啟動流程上：SNKRDUNK 或臺銀掛掉不該讓服務起不來。
+        app.state.market_service = MarketService(
             repository,
-            SnkrdunkClient(http_client, sleep=sleep, request_interval=request_interval),
-            CardImageStore(images_dir),
+            sales,
+            snkrdunk,
+            FxRateService(
+                FxRateRepository(connection), fx_download or BotRateDownload()
+            ),
+            clock=clock,
         )
         yield
         http_client.close()

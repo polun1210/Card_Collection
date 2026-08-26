@@ -9,9 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from .holdings import HoldingRepository, summarize
+from .holdings import HoldingRepository, summarize, with_market_values
 from .images import IMAGE_MEDIA_TYPE, CardImageError
 from .mapping import DEFAULT_BATCH_SIZE, MappingService
+from .market import MarketService
 from .repository import MappingCandidateRepository
 
 router = APIRouter()
@@ -29,9 +30,24 @@ def get_holdings(request: Request) -> HoldingRepository:
     return request.app.state.holdings
 
 
+def get_market(request: Request) -> MarketService:
+    return request.app.state.market_service
+
+
 Repository = Annotated[MappingCandidateRepository, Depends(get_repository)]
 Mapping = Annotated[MappingService, Depends(get_mapping_service)]
 Holdings = Annotated[HoldingRepository, Depends(get_holdings)]
+Market = Annotated[MarketService, Depends(get_market)]
+
+
+def get_card(apparel_id: int, repository: Repository) -> dict:
+    card = repository.find_card(apparel_id)
+    if card is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="查無此卡種")
+    return card
+
+
+CardRow = Annotated[dict, Depends(get_card)]
 
 
 EXPORT_COLUMNS = (
@@ -107,10 +123,7 @@ def undo_confirm(mapping_candidate_id: int, repository: Repository) -> dict[str,
 
 
 @router.get("/api/cards/{apparel_id}")
-def read_card(apparel_id: int, repository: Repository) -> dict:
-    card = repository.find_card(apparel_id)
-    if card is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="查無此卡種")
+def read_card(card: CardRow) -> dict:
     return card
 
 
@@ -148,14 +161,70 @@ def read_progress(repository: Repository) -> dict[str, int]:
     return repository.progress()
 
 
+# --- 行情 ---------------------------------------------------------------
+
+
+@router.post("/api/market/crawl")
+def crawl_market(market: Market) -> dict:
+    """手動觸發一輪全量爬取。不接排程——行情是會變的資料，不適合當開機條件。"""
+    return market.crawl()
+
+
+@router.get("/api/market/values")
+def read_market_values(market: Market, repository: Repository) -> list[dict]:
+    values = market.values()
+    return [
+        {**_card_identity(card), "market_value": values[card["apparel_id"]]}
+        for card in repository.list_cards()
+        if card["apparel_id"] in values
+    ]
+
+
+@router.get("/api/market/quarantine")
+def read_market_quarantine(market: Market) -> list[dict]:
+    """被擋下來的成交與各自的原因。可疑資料不參與計算，但也不會被靜默丟掉。"""
+    return list(market.quarantined())
+
+
+@router.get("/api/cards/{apparel_id}/market")
+def read_card_market_value(card: CardRow, market: Market) -> dict:
+    """從未抓到任何成交的卡種不給市值——不為了填滿版面而編一個數字。"""
+    return {
+        **_card_identity(card),
+        "market_value": market.value_for(card["apparel_id"]),
+    }
+
+
+@router.get("/api/cards/{apparel_id}/sales")
+def read_card_sales(card: CardRow, market: Market) -> list[dict]:
+    """單一卡種的成交明細。**稽核用途**，不是給儀表板顯示的。
+
+    原幣、SNKRDUNK 的原始狀態與枚数文字、實際採用的匯率與牌告日都在這裡，
+    日後發現換算有誤時回得去，也核對得出篩選是否正確。
+    """
+    return list(market.sales_for(card["apparel_id"]))
+
+
+def _card_identity(card: dict) -> dict:
+    return {
+        "apparel_id": card["apparel_id"],
+        "series_raw": card["series_raw"],
+        "number_raw": card["number_raw"],
+        "card_name_raw": card["card_name_raw"],
+    }
+
+
+# --- 持有品 -------------------------------------------------------------
+
+
 @router.get("/api/holdings")
-def read_holdings(holdings: Holdings) -> list[dict]:
-    return list(holdings.list_all())
+def read_holdings(holdings: Holdings, market: Market) -> list[dict]:
+    return list(with_market_values(holdings.list_all(), market.values()))
 
 
 @router.get("/api/holdings/summary")
-def read_holdings_summary(holdings: Holdings) -> dict[str, int]:
-    return summarize(holdings.list_all())
+def read_holdings_summary(holdings: Holdings, market: Market) -> dict[str, int]:
+    return summarize(with_market_values(holdings.list_all(), market.values()))
 
 
 @router.get("/api/holdings/imports")
@@ -165,34 +234,36 @@ def read_holding_imports(holdings: Holdings) -> list[dict]:
 
 
 @router.get("/api/cards/{apparel_id}/holdings")
-def read_card_holdings(
-    apparel_id: int, repository: Repository, holdings: Holdings
-) -> dict:
-    if repository.find_card(apparel_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="查無此卡種")
-    rows = holdings.list_for_apparel(apparel_id)
+def read_card_holdings(card: CardRow, holdings: Holdings, market: Market) -> dict:
+    apparel_id = card["apparel_id"]
+    rows = with_market_values(holdings.list_for_apparel(apparel_id), market.values())
     return {
         "apparel_id": apparel_id,
         "holdings": list(rows),
         "summary": summarize(rows),
+        "market_value": market.value_for(apparel_id),
     }
 
 
 @router.get("/holdings", response_class=HTMLResponse)
-def read_holdings_page(request: Request, holdings: Holdings) -> HTMLResponse:
-    rows = holdings.list_all()
+def read_holdings_page(
+    request: Request, holdings: Holdings, market: Market
+) -> HTMLResponse:
+    values = market.values()
+    rows = with_market_values(holdings.list_all(), values)
     return request.app.state.templates.TemplateResponse(
         request,
         "holdings.html",
         {
-            "kinds": _group_by_kind(rows),
+            "kinds": _group_by_kind(rows, values),
             "summary": summarize(rows),
+            "quarantined": market.quarantined(),
             "imports": holdings.list_imports(),
         },
     )
 
 
-def _group_by_kind(rows: Iterable[dict]) -> list[dict]:
+def _group_by_kind(rows: Iterable[dict], values: dict[int, dict]) -> list[dict]:
     """依卡種分組。清單本身已排序，所以同卡種的列必定相鄰。"""
     grouped: dict[tuple[str, str, str], dict] = {}
     for row in rows:
@@ -210,6 +281,7 @@ def _group_by_kind(rows: Iterable[dict]) -> list[dict]:
         kind["holdings"].append(row)
     for kind in grouped.values():
         kind["summary"] = summarize(kind["holdings"])
+        kind["market_value"] = values.get(kind["apparel_id"])
     return list(grouped.values())
 
 

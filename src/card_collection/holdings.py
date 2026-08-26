@@ -34,20 +34,64 @@ _STABLE_ORDER = (
 )
 
 
+def with_market_values(
+    holdings: Sequence[dict], values: dict[int, dict]
+) -> tuple[dict, ...]:
+    """為持有中的持有品接上市值與未實現損益。
+
+    只有持有中的才接：已售出的持有品有終局的售出價，不會因為這個卡種現在有了市值
+    就冒出一筆未實現損益。沒有市值的卡種，其持有品**不長出損益欄位**——0 會被讀成
+    「不賺不賠」，那是把缺資料說成一個結論。
+    """
+    return tuple(
+        _with_market_value(holding, values.get(holding["apparel_id"]))
+        for holding in holdings
+    )
+
+
+def _with_market_value(holding: dict, value: dict | None) -> dict:
+    if value is None or holding["status"] != STATUS_HELD:
+        return holding
+    unrealized = value["market_value_twd"] - holding["cost_twd"]
+    return {
+        **holding,
+        "market_value": value,
+        "market_value_twd": value["market_value_twd"],
+        "unrealized_pnl_twd": unrealized,
+        # 與已實現損益同一個報酬率定義：(結果 − 成本) ÷ 成本。
+        "return_rate": unrealized / holding["cost_twd"],
+    }
+
+
 def summarize(holdings: Sequence[dict]) -> dict[str, int]:
-    """持有成本只算持有中的；已實現損益只算已售出的。兩者永不混入同一個數字。"""
+    """持有成本只算持有中的；已實現損益只算已售出的。兩者永不混入同一個數字。
+
+    未實現損益同理，它與已實現損益分開呈現——賣掉賺的錢不該被算進「我現在的卡值
+    多少」。沒有市值的持有品不進總和，另外報出還有幾張缺市值，總市值才不會被讀成
+    已經涵蓋全部。
+    """
     held = [holding for holding in holdings if holding["status"] == STATUS_HELD]
     sold = [holding for holding in holdings if holding["status"] == STATUS_SOLD]
+    valued = [holding for holding in held if "market_value_twd" in holding]
     return {
         "held_count": len(held),
         "sold_count": len(sold),
         "held_cost_twd": sum(holding["cost_twd"] for holding in held),
         "realized_pnl_twd": sum(holding["realized_pnl_twd"] for holding in sold),
+        "valued_count": len(valued),
+        "unvalued_count": len(held) - len(valued),
+        "held_cost_valued_twd": sum(holding["cost_twd"] for holding in valued),
+        "held_market_value_twd": sum(
+            holding["market_value_twd"] for holding in valued
+        ),
+        "unrealized_pnl_twd": sum(
+            holding["unrealized_pnl_twd"] for holding in valued
+        ),
     }
 
 
 def _to_holding(row: sqlite3.Row) -> dict:
-    """已售出才帶損益欄位。持有中的損益需要市值，市值還不存在。
+    """已售出帶已實現損益。持有中的未實現損益要等市值接上（見 with_market_values）。
 
     缺的數字就讓欄位不存在，不是 null 也不是 0——0 會被讀成「不賺不賠」。
     """
