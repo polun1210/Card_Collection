@@ -194,6 +194,14 @@ class MarketService:
     def value_for(self, apparel_id: int) -> dict | None:
         return market_value(self._sales.active_for_apparel(apparel_id), self.today())
 
+    def active_sales(self) -> dict[int, list[dict]]:
+        """參與計算的成交紀錄，依卡種分組、日期升冪。
+
+        走勢圖要的是**原料**而不是算好的市值：它得自己把每一天以前的那一段切出
+        來，才不會讓未來的成交洩漏進過去的某一天。
+        """
+        return self._sales.active_by_apparel()
+
     def quarantined(self) -> tuple[dict, ...]:
         return self._sales.list_quarantined()
 

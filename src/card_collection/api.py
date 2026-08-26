@@ -23,6 +23,7 @@ from .mapping import DEFAULT_BATCH_SIZE, MappingService
 from .market import MarketService
 from .portfolio import overview
 from .repository import CardKindExists, MappingCandidateRepository
+from .trend import daily_trend, spans_a_year
 
 router = APIRouter()
 
@@ -454,10 +455,15 @@ def create_card_kind(body: CardKindRequest, repository: Repository) -> dict:
 def read_portfolio(
     holdings: Holdings, market: Market, runs: CrawlRuns, clock: Clock
 ) -> dict:
-    """首頁要的一切，一次拿齊。走勢圖與卡圖牆之後加進同一個回應。"""
+    """首頁要的一切，一次拿齊，畫面不必自己去湊四個地方。
+
+    走勢圖的資料**一次全給**：`7D / 1M / 3M / YTD / ALL` 之中 ALL 是其他四個的
+    超集合，在瀏覽器切片即可。這省掉一個端點，也讓區間切換是零延遲的。
+    """
     rows = with_market_values(holdings.list_all(), market.values())
     return {
         "summary": overview(summarize(rows)),
+        "trend": daily_trend(rows, market.active_sales(), market.today()),
         "freshness": freshness(runs.latest(), runs.last_succeeded(), clock()),
         "wall": card_wall(rows),
     }
@@ -472,8 +478,12 @@ def read_portfolio_page(
     clock: Clock,
 ) -> HTMLResponse:
     """打開就看到自己的收藏，不是後台工具——待審佇列因此在 /queue。"""
+    portfolio = read_portfolio(holdings, market, runs, clock)
     return request.app.state.templates.TemplateResponse(
-        request, "portfolio.html", read_portfolio(holdings, market, runs, clock)
+        request,
+        "portfolio.html",
+        # 跨度不足一年時，YTD 會是一個與 ALL 完全一樣的區間，不給它按鈕。
+        {**portfolio, "show_ytd": spans_a_year(portfolio["trend"])},
     )
 
 
