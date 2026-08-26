@@ -6,3 +6,6 @@ __pycache__/
 data/images/
 .coverage
 htmlcov/
+data/logs/
+*.db-wal
+*.db-shm
