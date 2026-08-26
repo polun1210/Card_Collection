@@ -450,7 +450,12 @@ def create_card_kind(body: CardKindRequest, repository: Repository) -> dict:
 
 @router.get("/holdings", response_class=HTMLResponse)
 def read_holdings_page(
-    request: Request, holdings: Holdings, market: Market, runs: CrawlRuns, clock: Clock
+    request: Request,
+    holdings: Holdings,
+    market: Market,
+    runs: CrawlRuns,
+    clock: Clock,
+    repository: Repository,
 ) -> HTMLResponse:
     values = market.values()
     rows = with_market_values(holdings.list_all(), values)
@@ -459,6 +464,9 @@ def read_holdings_page(
         "holdings.html",
         {
             "kinds": _group_by_kind(rows, values),
+            # 新增持有品要從全部卡種裡挑一個，不只是已經有持有品的那些。
+            "all_kinds": repository.list_kinds(),
+            "today": clock().date().isoformat(),
             "summary": summarize(rows),
             "quarantined": market.quarantined(),
             "imports": holdings.list_imports(),

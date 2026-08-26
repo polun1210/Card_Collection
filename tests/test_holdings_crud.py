@@ -494,3 +494,71 @@ def test_清空購入成本會被擋下(client, add_holding):
     assert response.status_code == 400
     assert "購入成本" in response.json()["detail"]
     assert _find(client, holding_id)["cost_twd"] == 2600
+
+
+# --- 畫面 ---------------------------------------------------------------
+
+
+def _page(client) -> str:
+    return client.get("/holdings").text
+
+
+def test_持有品頁有新增持有品與新增卡種的入口(client):
+    page = _page(client)
+
+    # 不必開另一個工具或打 API。
+    assert "新增持有品" in page
+    assert "新增卡種" in page
+
+
+def test_每一筆持有中的持有品旁邊都有售出與刪除(client, add_holding):
+    add_holding(_kind_id(client, LUCARIO))
+
+    page = _page(client)
+    # 操作入口就在那一筆旁邊，因此不必先在別的地方查出 id。
+    assert 'onclick="openSale(this)"' in page
+    assert 'onclick="openEdit(this)"' in page
+    assert 'onclick="openDelete(this)"' in page
+
+
+def test_已售出的持有品旁邊是改回持有中而不是售出(client, add_holding):
+    holding_id = add_holding(_kind_id(client, LUCARIO))
+    client.post(f"/api/holdings/{holding_id}/sale", json={"sold_price_twd": 4000})
+
+    page = _page(client)
+    assert 'onclick="openUnsell(this)"' in page
+
+
+def test_刪除確認需要的那一筆資料就在畫面上(client, add_holding):
+    add_holding(_kind_id(client, LUCARIO), cost_twd=2600, purchase_date="2026-03-15")
+
+    page = _page(client)
+    # 確認訊息要說得出是**具體哪一筆**，所以卡種、購入日與成本都必須到得了前端。
+    assert 'data-purchase="2026-03-15"' in page
+    assert 'data-cost="2600"' in page
+    assert 'data-kind="MEGA Lucario（M2a #228）"' in page
+
+
+def test_已售出的持有品帶著已實現損益供確認訊息使用(client, add_holding):
+    holding_id = add_holding(_kind_id(client, LUCARIO), cost_twd=2600)
+    client.post(f"/api/holdings/{holding_id}/sale", json={"sold_price_twd": 4000})
+
+    page = _page(client)
+    # 刪掉一筆已售出的會動到已實現損益，確認時必須說得出會少多少。
+    assert 'data-realized="1400"' in page
+
+
+def test_新增持有品挑得到尚未確認的卡種(client):
+    client.post("/api/card-kinds", json=NEW_KIND)
+
+    page = _page(client)
+    # 記一筆購入不該被「行情對應還沒做完」擋住。
+    assert "Rayquaza ex（M2b #12）" in page
+
+
+def test_手機上仍讀得到持有品頁(client):
+    page = _page(client)
+
+    # 手機是唯讀場景，這一刀不能把它弄壞。
+    assert 'name="viewport"' in page
+    assert 'class="tblwrap"' in page

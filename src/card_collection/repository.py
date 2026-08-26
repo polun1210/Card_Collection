@@ -102,6 +102,16 @@ class MappingCandidateRepository:
         ).fetchone()
         return None if row is None else dict(row)
 
+    def list_kinds(self) -> tuple[dict, ...]:
+        """全部卡種列，含未確認與已否決的。供新增持有品時挑選。
+
+        未確認的也要列出來——記一筆購入不該被「行情對應還沒做完」擋住。
+        """
+        rows = self._connection.execute(
+            f"SELECT {_QUEUE_COLUMNS} FROM card_mapping_candidate {_STABLE_ORDER}"
+        )
+        return tuple(dict(row) for row in rows)
+
     def ids_by_kind(self) -> dict[tuple[str, str, str], int]:
         """卡種原始三元組 → 卡種列 id，含已確認、已否決與待處理的列。"""
         rows = self._connection.execute(

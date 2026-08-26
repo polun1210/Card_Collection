@@ -42,9 +42,21 @@
   .sample { display: block; font-size: .72rem; color: #6b7280; font-variant-numeric: tabular-nums; }
   .stale { display: block; font-size: .72rem; color: #b45309; }
   .lots { font-size: .82rem; color: #4b5563; margin: 0; padding: 0; list-style: none; }
-  .lots li { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lots li { font-variant-numeric: tabular-nums; display: flex; gap: .8rem; align-items: baseline; justify-content: space-between; }
+  .lots li > span:first-child { white-space: nowrap; }
   .lots .sold { color: #6b7280; }
+  .lots .acts { display: inline-flex; gap: .3rem; flex-shrink: 0; }
   .none { color: #9ca3af; }
+  button.link { border: none; padding: .1rem .35rem; font-size: .78rem; color: #2563eb; background: transparent; }
+  button.link.danger { color: #b91c1c; }
+  dialog { border: 1px solid #9ca3af; border-radius: 6px; padding: 1.2rem 1.4rem; max-width: 26rem; width: 90vw; color-scheme: light dark; }
+  dialog h3 { margin: 0 0 .2rem; font-size: 1rem; }
+  dialog .about { font-size: .84rem; color: #4b5563; margin: 0 0 .6rem; }
+  dialog label { display: block; margin: .6rem 0 0; font-size: .82rem; color: #4b5563; }
+  dialog input, dialog select { font: inherit; width: 100%; padding: .35rem .5rem; margin-top: .2rem; box-sizing: border-box; }
+  dialog menu { display: flex; gap: .6rem; justify-content: flex-end; margin: 1.2rem 0 0; padding: 0; }
+  .err { color: #b91c1c; font-size: .84rem; margin: .6rem 0 0; }
+  .willchange { color: #b45309; font-size: .84rem; margin: .5rem 0 0; }
 </style>
 </head>
 <body>
@@ -115,6 +127,8 @@
   <div class="toolbar">
     <h2>依卡種</h2>
     <button id="crawl" onclick="crawlMarket(this)">更新行情</button>
+    <button onclick="openCreate()">新增持有品</button>
+    <button onclick="openKind()">新增卡種</button>
     <a href="/">回卡種對應</a>
   </div>
   <div id="crawl-report"></div>
@@ -175,7 +189,19 @@
           <td>
             <ul class="lots">
               {% for holding in kind.holdings %}
-              <li{% if holding.status == 'sold' %} class="sold"{% endif %}>
+              <li{% if holding.status == 'sold' %} class="sold"{% endif %}
+                  data-id="{{ holding.id }}"
+                  data-kind-id="{{ holding.mapping_candidate_id }}"
+                  data-kind="{{ kind.card_name_raw }}（{{ kind.series_raw }} #{{ kind.number_raw }}）"
+                  data-purchase="{{ holding.purchase_date }}"
+                  data-cost="{{ holding.cost_twd }}"
+                  data-status="{{ holding.status }}"
+                  {%- if holding.status == 'sold' %}
+                  data-sold="{{ holding.sold_date }}"
+                  data-price="{{ holding.sold_price_twd }}"
+                  data-realized="{{ holding.realized_pnl_twd }}"
+                  {%- endif %}>
+                <span>
                 {{ holding.purchase_date }} 購入 {{ "{:,}".format(holding.cost_twd) }}
                 {%- if holding.status == 'sold' %}
                   → {{ holding.sold_date }} 售出 {{ "{:,}".format(holding.sold_price_twd) }}
@@ -184,6 +210,16 @@
                   → 現值 {{ "{:,}".format(holding.market_value_twd) }}
                   （{{ "{:+,}".format(holding.unrealized_pnl_twd) }}，{{ "{:+.1%}".format(holding.return_rate) }}）
                 {%- endif %}
+                </span>
+                <span class="acts">
+                  {% if holding.status == 'held' %}
+                  <button class="link" onclick="openSale(this)">售出</button>
+                  {% else %}
+                  <button class="link" onclick="openUnsell(this)">改回持有中</button>
+                  {% endif %}
+                  <button class="link" onclick="openEdit(this)">編輯</button>
+                  <button class="link danger" onclick="openDelete(this)">刪除</button>
+                </span>
               </li>
               {% endfor %}
             </ul>
@@ -230,7 +266,30 @@
   <p class="hint">匯入來源：{{ record.source_path }}／{{ record.row_count }} 筆／{{ record.imported_at }}</p>
   {% endfor %}
 </div>
+
+<!-- 卡種清單由伺服器端渲染成真的 HTML，對話框需要時複製一份。塞進 JS 陣列的話，
+     這份資料就只有 JS 看得到了。 -->
+<select id="kind-options" hidden>
+  {% for kind in all_kinds %}
+  <option value="{{ kind.id }}">{{ kind.card_name_raw }}（{{ kind.series_raw }} #{{ kind.number_raw }}）</option>
+  {% endfor %}
+</select>
+
+<dialog id="editor">
+  <h3 id="editor-title"></h3>
+  <p class="about" id="editor-about"></p>
+  <div id="editor-fields"></div>
+  <p class="willchange" id="editor-warning"></p>
+  <p class="err" id="editor-error"></p>
+  <menu>
+    <button type="button" onclick="document.getElementById('editor').close()">取消</button>
+    <button type="button" id="editor-submit" onclick="submitEditor()">確定</button>
+  </menu>
+</dialog>
+
 <script>
+  const TODAY = "{{ today }}";
+
   const escapeHtml = (value) => String(value).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 
   function renderReport(body) {
@@ -288,6 +347,184 @@
       box.textContent = "連線中斷（" + error + "）——爬取可能仍在伺服器端進行。重新整理即可看到真實結果。";
     }
     button.disabled = false;
+  }
+
+  // --- 持有品的新增、編輯、售出與刪除 -----------------------------------
+  //
+  // 每一筆持有品旁邊就有它自己的入口，操作對象因此不會弄錯。售出時畫面上本來就
+  // 列著該卡種所有持有中的那幾張（含購入日與成本），由人指定賣掉哪一張——系統
+  // 不自動 FIFO、不自動挑成本最高者（ADR-0009）。
+
+  const dialog = document.getElementById("editor");
+  let pending = null;
+
+  const lotOf = (button) => button.closest("li").dataset;
+  const str = (id) => document.getElementById(id).value.trim();
+  const num = (id) => { const v = str(id); return v === "" ? null : Number(v); };
+  const money = (value) => Number(value).toLocaleString();
+
+  const field = (label, control) => `<label>${escapeHtml(label)}${control}</label>`;
+  const dateField = (id, label, value) => field(label, `<input id="${id}" type="date" value="${value}">`);
+  const moneyField = (id, label, value) => field(label, `<input id="${id}" type="number" min="1" step="1" value="${value}">`);
+  const textField = (id, label) => field(label, `<input id="${id}" type="text">`);
+
+  function kindSelect(selected) {
+    const clone = document.getElementById("kind-options").cloneNode(true);
+    clone.id = "f-kind";
+    clone.removeAttribute("hidden");
+    for (const option of clone.options) {
+      option.toggleAttribute("selected", Number(option.value) === selected);
+    }
+    return field("卡種", clone.outerHTML);
+  }
+
+  function openEditor(config) {
+    document.getElementById("editor-title").textContent = config.title;
+    document.getElementById("editor-about").textContent = config.about || "";
+    document.getElementById("editor-fields").innerHTML = config.fields || "";
+    document.getElementById("editor-warning").textContent = config.warning || "";
+    document.getElementById("editor-error").textContent = "";
+    const submit = document.getElementById("editor-submit");
+    submit.textContent = config.submitLabel || "確定";
+    submit.disabled = false;
+    pending = config;
+    dialog.showModal();
+  }
+
+  function detailOf(body) {
+    // 驗證失敗要說出是哪個欄位、為什麼。只說一句「失敗」等於沒說。
+    const detail = body.detail;
+    if (!detail) return "";
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) return detail.map((item) => item.msg).join("；");
+    return detail.message || "";
+  }
+
+  async function submitEditor() {
+    const error = document.getElementById("editor-error");
+    const submit = document.getElementById("editor-submit");
+    error.textContent = "";
+    submit.disabled = true;
+    const request = pending.build();
+    try {
+      const response = await fetch(request.url, {
+        method: request.method,
+        headers: { "Content-Type": "application/json" },
+        body: request.body === undefined ? undefined : JSON.stringify(request.body),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        error.textContent = detailOf(body) || `失敗（${response.status}）`;
+        submit.disabled = false;
+        return;
+      }
+      // 所有衍生數字都是算出來的，重整一次畫面就全部正確。
+      location.reload();
+    } catch (failure) {
+      error.textContent = "連線中斷：" + failure;
+      submit.disabled = false;
+    }
+  }
+
+  function openCreate() {
+    openEditor({
+      title: "新增持有品",
+      about: "購入日預設今天，補登較早的購入時改掉即可。",
+      fields: kindSelect(null) + dateField("f-purchase", "購入日", TODAY) + moneyField("f-cost", "購入成本（新台幣）", ""),
+      build: () => ({
+        method: "POST",
+        url: "/api/holdings",
+        body: {
+          mapping_candidate_id: Number(str("f-kind")),
+          purchase_date: str("f-purchase"),
+          cost_twd: num("f-cost"),
+        },
+      }),
+    });
+  }
+
+  function openSale(button) {
+    const lot = lotOf(button);
+    openEditor({
+      title: "售出",
+      about: `${lot.kind}／${lot.purchase} 購入 ${money(lot.cost)}`,
+      fields: dateField("f-sold", "售出日", TODAY) + moneyField("f-price", "售出價（新台幣）", ""),
+      build: () => ({
+        method: "POST",
+        url: `/api/holdings/${lot.id}/sale`,
+        body: { sold_date: str("f-sold"), sold_price_twd: num("f-price") },
+      }),
+    });
+  }
+
+  function openEdit(button) {
+    const lot = lotOf(button);
+    const sold = lot.status === "sold";
+    openEditor({
+      title: "編輯持有品",
+      about: lot.kind,
+      fields: kindSelect(Number(lot.kindId))
+        + dateField("f-purchase", "購入日", lot.purchase)
+        + moneyField("f-cost", "購入成本（新台幣）", lot.cost)
+        + (sold ? dateField("f-sold", "售出日", lot.sold) + moneyField("f-price", "售出價（新台幣）", lot.price) : ""),
+      build: () => {
+        const body = {
+          mapping_candidate_id: Number(str("f-kind")),
+          purchase_date: str("f-purchase"),
+          cost_twd: num("f-cost"),
+        };
+        if (sold) {
+          body.sold_date = str("f-sold");
+          body.sold_price_twd = num("f-price");
+        }
+        return { method: "PATCH", url: `/api/holdings/${lot.id}`, body };
+      },
+    });
+  }
+
+  function openUnsell(button) {
+    const lot = lotOf(button);
+    openEditor({
+      title: "改回持有中",
+      about: `${lot.kind}／${lot.sold} 售出 ${money(lot.price)}`,
+      warning: `售出日與售出價會一併清空，已實現損益會減少 ${money(lot.realized)}。`,
+      build: () => ({
+        method: "PATCH",
+        url: `/api/holdings/${lot.id}`,
+        body: { sold_date: null, sold_price_twd: null },
+      }),
+    });
+  }
+
+  function openDelete(button) {
+    const lot = lotOf(button);
+    openEditor({
+      title: "刪除持有品",
+      // 確認的必須是**具體哪一筆**，不是一個抽象的「確定嗎」。
+      about: `${lot.kind}／${lot.purchase} 購入 ${money(lot.cost)}`,
+      warning: lot.status === "sold"
+        ? `刪除後已實現損益會減少 ${money(lot.realized)}。這個動作無法復原。`
+        : "這個動作無法復原。",
+      submitLabel: "確定刪除",
+      build: () => ({ method: "DELETE", url: `/api/holdings/${lot.id}` }),
+    });
+  }
+
+  function openKind() {
+    openEditor({
+      title: "新增卡種",
+      about: "新卡種會進入待確認清單，之後在卡種對應頁搜尋並確認到 SNKRDUNK。確認之前也能先掛持有品。",
+      fields: textField("f-series", "系列代碼") + textField("f-number", "卡號") + textField("f-name", "卡名"),
+      build: () => ({
+        method: "POST",
+        url: "/api/card-kinds",
+        body: {
+          series_raw: str("f-series"),
+          number_raw: str("f-number"),
+          card_name_raw: str("f-name"),
+        },
+      }),
+    });
   }
 </script>
 </body>
