@@ -1,4 +1,8 @@
-"""應用程式組裝。"""
+"""應用程式組裝。
+
+接線本身住在 `services.py`——web 服務與兩支 CLI 共用同一份組裝規則。這裡只留下
+**web 服務專屬的啟動儀式**：卡種列的 seed 與持有品的一次性匯入。
+"""
 
 import time
 from collections.abc import Callable
@@ -12,22 +16,12 @@ from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from .api import router
-from .db import connect, create_schema
-from .fx import BotRateDownload, FxRateRepository, FxRateService
+from .heartbeat import Heartbeat
 from .holding_import import HoldingImportService
-from .holdings import HoldingRepository
-from .images import CardImageError, CardImageStore
-from .mapping import MappingService
-from .market import MarketService
+from .images import CardImageError
 from .notion_csv import read_card_kinds
-from .repository import MappingCandidateRepository
-from .sales import SaleRepository
-from .snkrdunk import (
-    DEFAULT_REQUEST_INTERVAL_SECONDS,
-    USER_AGENT,
-    SnkrdunkClient,
-    SnkrdunkError,
-)
+from .services import build_services
+from .snkrdunk import DEFAULT_REQUEST_INTERVAL_SECONDS, SnkrdunkError
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -41,49 +35,34 @@ def create_app(
     request_interval: float = DEFAULT_REQUEST_INTERVAL_SECONDS,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     fx_download: Callable[[], bytes] | None = None,
+    heartbeat: Heartbeat | None = None,
 ) -> FastAPI:
-    """匯率不走 httpx：臺銀需要模擬 Chrome 的 TLS 指紋，那是另一套 HTTP 堆疊，
-    所以它的測試接縫在下載器本身，不在 httpx 的傳輸層（ADR-0017）。"""
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        connection = connect(db_path)
-        create_schema(connection)
-        repository = MappingCandidateRepository(connection)
-        repository.seed(read_card_kinds(csv_path))
-        holdings = HoldingRepository(connection)
+        services = build_services(
+            db_path=db_path,
+            images_dir=images_dir,
+            transport=transport,
+            sleep=sleep,
+            request_interval=request_interval,
+            clock=clock,
+            fx_download=fx_download,
+            heartbeat=heartbeat,
+        )
+        services.cards.seed(read_card_kinds(csv_path))
         # 匯入不合格就讓服務起不來。訊息指出是哪一列，改完 CSV 重啟即可——
         # 帶著半份持有品把服務跑起來，比起不來更糟。
-        HoldingImportService(holdings, repository).import_once(csv_path)
+        HoldingImportService(services.holdings, services.cards).import_once(csv_path)
 
-        http_client = httpx.Client(
-            headers={"User-Agent": USER_AGENT},
-            timeout=30,
-            follow_redirects=True,
-            transport=transport,
-        )
-        snkrdunk = SnkrdunkClient(
-            http_client, sleep=sleep, request_interval=request_interval
-        )
-        sales = SaleRepository(connection)
-        app.state.repository = repository
-        app.state.holdings = holdings
-        app.state.clock = clock
-        app.state.mapping_service = MappingService(
-            repository, snkrdunk, CardImageStore(images_dir)
-        )
+        app.state.repository = services.cards
+        app.state.holdings = services.holdings
+        app.state.clock = services.clock
+        app.state.mapping_service = services.mapping
         # 行情不掛在啟動流程上：SNKRDUNK 或臺銀掛掉不該讓服務起不來。
-        app.state.market_service = MarketService(
-            repository,
-            sales,
-            snkrdunk,
-            FxRateService(
-                FxRateRepository(connection), fx_download or BotRateDownload()
-            ),
-            clock=clock,
-        )
+        app.state.market_service = services.market
+        app.state.crawl_runs = services.runs
         yield
-        http_client.close()
-        connection.close()
+        services.close()
 
     app = FastAPI(title="Card Collection", lifespan=lifespan)
     app.state.templates = Jinja2Templates(directory=TEMPLATES_DIR)

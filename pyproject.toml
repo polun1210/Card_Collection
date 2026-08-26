@@ -5,6 +5,7 @@ description = "個人使用的寶可夢 PSA 10 鑑定卡追蹤儀表板"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
+    "httpx>=0.28",
     "uvicorn[standard]>=0.32",
     "jinja2>=3.1",
     "pillow>=12.3.0",

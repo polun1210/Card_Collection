@@ -20,26 +20,24 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from card_collection.config import DEFAULT_DB_PATH  # noqa: E402
-from card_collection.db import connect, create_schema  # noqa: E402
+from card_collection.config import DEFAULT_DB_PATH, DEFAULT_IMAGES_DIR  # noqa: E402
 from card_collection.fx import (  # noqa: E402
     BOT_MONTH_JPY_URL,
     BotRateDownload,
     FxRateError,
     FxRateRepository,
-    FxRateService,
     parse_bot_csv,
 )
-from card_collection.market import MarketService  # noqa: E402
-from card_collection.repository import MappingCandidateRepository  # noqa: E402
-from card_collection.sales import SaleRepository  # noqa: E402
+from card_collection.services import build_services  # noqa: E402
 
 
 def backfill(months: list[str], db_path: Path = DEFAULT_DB_PATH) -> None:
-    connection = connect(db_path)
-    create_schema(connection)
-    rates = FxRateRepository(connection)
     now = datetime.now(UTC)
+    # 走正式程式的服務組裝，不自己接一份線——組裝規則只能有一個地方說了算。
+    services = build_services(
+        db_path=db_path, images_dir=DEFAULT_IMAGES_DIR, clock=lambda: now
+    )
+    rates = FxRateRepository(services.connection)
 
     for month in months:
         download = BotRateDownload(url=BOT_MONTH_JPY_URL.format(month=month))
@@ -54,28 +52,21 @@ def backfill(months: list[str], db_path: Path = DEFAULT_DB_PATH) -> None:
         newest = max(rate.rate_date for rate in fetched)
         print(f"{month}：{len(fetched)} 個營業日（{oldest} ～ {newest}）已寫入")
 
-    sales = SaleRepository(connection)
-    market = MarketService(
-        MappingCandidateRepository(connection),
-        sales,
-        snkrdunk=None,
-        fx=FxRateService(rates, BotRateDownload()),
-        clock=lambda: now,
-    )
-    # 只跑換算，不重爬 SNKRDUNK——成交紀錄早就在庫裡了。
-    result = market.convert_pending(now)
+    # 只跑換算，不重爬 SNKRDUNK——成交紀錄早就在庫裡了。因此也不開爬取帳本：
+    # 這不是一輪爬取，把它記成一輪會讓「上次更新」說謊。
+    result = services.market.convert_pending(now)
     print(
         f"換算：待處理 {result['pending']} 筆、完成 {result['converted']} 筆"
         + (f"、匯率來源錯誤：{result['error']}" if result["error"] else "")
     )
-    remaining = sales.list_quarantined()
+    remaining = services.sales.list_quarantined()
     print(f"仍在待審：{len(remaining)} 筆")
     for sale in remaining:
         print(
             f"  {sale['sold_date_jst']}  ¥{sale['price_jpy']:,}  "
             f"{sale['card_name_raw']}｜{sale['quarantine_reason']}"
         )
-    connection.close()
+    services.close()
 
 
 if __name__ == "__main__":

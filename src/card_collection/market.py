@@ -1,7 +1,12 @@
 """行情爬取的協調：成交紀錄進來、換算成台幣、算出市值。
 
-爬取由**手動觸發**，不接排程、不掛在啟動流程上。行情是會變的資料，不適合當開機
-條件——SNKRDUNK 掛掉不該讓服務起不來。
+爬取**不掛在啟動流程上**——行情是會變的資料，不適合當開機條件，SNKRDUNK 掛掉不
+該讓服務起不來。但它**接排程**：SNKRDUNK 的成交紀錄固定最多 20 筆且無分頁，漏掉
+一天，那天的成交就永久消失（ADR-0007、ADR-0019）。觸發來源有兩個——畫面上的按鈕
+與排程叫起來的 CLI——兩者都與服務的生命週期無關。
+
+自動化必須配可觀測性：每一輪都寫進爬取帳本，並對外送出心跳。少了它們，來源改版
+或被擋時畫面只會靜靜停在三週前（共識書 C6）。
 
 單一卡種失敗只影響那一張，其餘照跑；失敗的明確列在結果裡並附上原因，絕不靜默
 吞掉。跳過的（尚未對應到 SNKRDUNK 的卡種）也一樣要列出來。
@@ -10,7 +15,9 @@
 from collections.abc import Callable
 from datetime import date, datetime
 
+from .crawl_runs import TRIGGER_MANUAL, CrawlOutcome, CrawlRunRepository
 from .fx import FxRateService, to_twd
+from .heartbeat import Heartbeat
 from .repository import MappingCandidateRepository
 from .sales import (
     JST,
@@ -33,18 +40,43 @@ class MarketService:
         sales: SaleRepository,
         snkrdunk: SnkrdunkClient,
         fx: FxRateService,
+        runs: CrawlRunRepository,
+        heartbeat: Heartbeat,
         clock: Callable[[], datetime],
     ) -> None:
         self._cards = cards
         self._sales = sales
         self._snkrdunk = snkrdunk
         self._fx = fx
+        self._runs = runs
+        self._heartbeat = heartbeat
         self._clock = clock
 
     # --- 爬取 -----------------------------------------------------------
 
-    def crawl(self) -> dict:
-        """跑一輪全量爬取。回傳這一輪到底做了什麼，好與壞都寫在裡面。"""
+    def crawl(self, trigger: str = TRIGGER_MANUAL) -> dict:
+        """跑一輪全量爬取。回傳這一輪到底做了什麼，好與壞都寫在裡面。
+
+        帳本先開、心跳後送：`start()` 若因為已有一輪在跑而擋下來，**一個對外請求
+        都還沒送出**——重複觸發不會變成對 SNKRDUNK 的雙倍流量。
+
+        整輪炸掉時，帳本一定要收到 `failed` 才能讓例外繼續往上丟。少了這一步，那
+        一列會永遠停在 `running`，既冒充「還在跑」，又把鎖一直握著。
+        """
+        run_id = self._runs.start(trigger, self._clock())
+        self._heartbeat.started()
+        try:
+            report = self._crawl_once()
+        except Exception as error:
+            self._runs.fail(run_id, str(error), self._clock())
+            self._heartbeat.failed(str(error))
+            raise
+        outcome = CrawlOutcome.from_report(report)
+        self._runs.finish(run_id, outcome, self._clock())
+        self._heartbeat.succeeded(outcome)
+        return {**report, "run_id": run_id}
+
+    def _crawl_once(self) -> dict:
         now = self._clock()
         crawled, failed = self._fetch_all(now)
         fx = self.convert_pending(now)

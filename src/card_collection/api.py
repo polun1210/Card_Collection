@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
+from .crawl_runs import CrawlRunInProgress, CrawlRunRepository, freshness
 from .holdings import HoldingRepository, summarize, with_market_values
 from .images import IMAGE_MEDIA_TYPE, CardImageError
 from .mapping import DEFAULT_BATCH_SIZE, MappingService
@@ -34,10 +35,20 @@ def get_market(request: Request) -> MarketService:
     return request.app.state.market_service
 
 
+def get_crawl_runs(request: Request) -> CrawlRunRepository:
+    return request.app.state.crawl_runs
+
+
+def get_clock(request: Request):
+    return request.app.state.clock
+
+
 Repository = Annotated[MappingCandidateRepository, Depends(get_repository)]
 Mapping = Annotated[MappingService, Depends(get_mapping_service)]
 Holdings = Annotated[HoldingRepository, Depends(get_holdings)]
 Market = Annotated[MarketService, Depends(get_market)]
+CrawlRuns = Annotated[CrawlRunRepository, Depends(get_crawl_runs)]
+Clock = Annotated[object, Depends(get_clock)]
 
 
 def get_card(apparel_id: int, repository: Repository) -> dict:
@@ -166,8 +177,33 @@ def read_progress(repository: Repository) -> dict[str, int]:
 
 @router.post("/api/market/crawl")
 def crawl_market(market: Market) -> dict:
-    """手動觸發一輪全量爬取。不接排程——行情是會變的資料，不適合當開機條件。"""
-    return market.crawl()
+    """手動觸發一輪全量爬取。日常由排程的 CLI 跑，這裡是補救路徑。
+
+    **維持同步**，不改成 202 ＋ 輪詢：同步端點跑在 threadpool 裡，客戶端斷線不會
+    中止它——爬取照樣跑完、資料照樣入庫，唯一的損失是看不到那份報告，而帳本正好
+    補上這一塊，重新整理即可看到真實狀態（ADR-0019）。
+    """
+    try:
+        return market.crawl()
+    except CrawlRunInProgress as error:
+        # 409 而不是 200：這個請求什麼都沒做，說成成功就是說謊。
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"message": str(error), "run_id": error.run_id},
+        ) from error
+
+
+@router.get("/api/market/runs/latest")
+def read_latest_run(runs: CrawlRuns, clock: Clock) -> dict:
+    """最近一輪的狀態與統計，外加「是否已過期」的判定。"""
+    return freshness(runs.latest(), runs.last_succeeded(), clock())
+
+
+@router.get("/api/market/runs")
+def read_runs(
+    runs: CrawlRuns, limit: Annotated[int, Query(ge=1, le=100)] = 20
+) -> list[dict]:
+    return list(runs.list_recent(limit))
 
 
 @router.get("/api/market/values")
@@ -247,7 +283,7 @@ def read_card_holdings(card: CardRow, holdings: Holdings, market: Market) -> dic
 
 @router.get("/holdings", response_class=HTMLResponse)
 def read_holdings_page(
-    request: Request, holdings: Holdings, market: Market
+    request: Request, holdings: Holdings, market: Market, runs: CrawlRuns, clock: Clock
 ) -> HTMLResponse:
     values = market.values()
     rows = with_market_values(holdings.list_all(), values)
@@ -259,6 +295,9 @@ def read_holdings_page(
             "summary": summarize(rows),
             "quarantined": market.quarantined(),
             "imports": holdings.list_imports(),
+            # 市值有多新，必須與市值本身出現在同一個畫面上。停擺的爬取若不出聲，
+            # 三週前的數字看起來與今天的數字一模一樣。
+            "freshness": freshness(runs.latest(), runs.last_succeeded(), clock()),
         },
     )
 

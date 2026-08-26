@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from card_collection.app import create_app
 from card_collection.fx import BOT_L6M_JPY_URL, FxRateError
+from card_collection.heartbeat import Heartbeat
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NOTION_CSV = REPO_ROOT / "data" / "notion-export" / "pokemon_project.csv"
@@ -172,6 +173,7 @@ class RecordedFx:
         "wrong_shape",
         "english",
         "fails_with",
+        "crashes_with",
         "published_through",
     )
 
@@ -181,11 +183,16 @@ class RecordedFx:
         self.wrong_shape = False
         self.english = False
         self.fails_with: str | None = None
+        # 下載器丟出**沒被預期到的**例外（`FxRateError` 以外的）。這條路徑不會被
+        # 任何人接住，會一路炸穿整輪爬取——正是帳本的 try/except 要防的情況。
+        self.crashes_with: str | None = None
         # 只掛到某一天為止（格式 YYYYMMDD）：模擬當日牌告還沒掛出來。
         self.published_through: str | None = None
 
     def __call__(self) -> bytes:
         self.requests.append(BOT_L6M_JPY_URL)
+        if self.crashes_with is not None:
+            raise RuntimeError(self.crashes_with)
         if self.fails_with is not None:
             raise FxRateError(self.fails_with)
         if self.bot_challenge:
@@ -207,6 +214,36 @@ class RecordedFx:
         return "".join(kept).encode("utf-8-sig")
 
 
+class RecordedHeartbeat:
+    """攔在心跳的**送出接縫**上。
+
+    正式程式送的是真的 HTTP POST，測試只需要知道送了什麼、送到哪。這個接縫同時
+    保證測試永遠不會真的打到外面——就算跑測試的機器上設了那個環境變數。
+    """
+
+    URL = "https://healthchecks.example/ping/0000-test"
+
+    __slots__ = ("sent", "logs", "url", "fails")
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str]] = []
+        self.logs: list[str] = []
+        self.url: str | None = self.URL
+        self.fails = False
+
+    def build(self) -> Heartbeat:
+        return Heartbeat(url=self.url, send=self._send, log=self.logs.append)
+
+    @property
+    def bodies(self) -> list[str]:
+        return [body for _, body in self.sent]
+
+    def _send(self, url: str, body: str) -> None:
+        if self.fails:
+            raise RuntimeError("心跳送不出去")
+        self.sent.append((url, body))
+
+
 @pytest.fixture
 def notion_csv() -> Path:
     return NOTION_CSV
@@ -223,7 +260,17 @@ def fx() -> RecordedFx:
 
 
 @pytest.fixture
-def client_factory(tmp_path: Path, snkrdunk: RecordedSnkrdunk, fx: RecordedFx):
+def heartbeat() -> RecordedHeartbeat:
+    return RecordedHeartbeat()
+
+
+@pytest.fixture
+def client_factory(
+    tmp_path: Path,
+    snkrdunk: RecordedSnkrdunk,
+    fx: RecordedFx,
+    heartbeat: RecordedHeartbeat,
+):
     """同一組暫存資料庫與卡圖目錄，可重複建立 app——用來驗證重啟後的狀態。
 
     可指定自己的 CSV（驗證不合格來源資料的匯入），也可指定「現在」是何時
@@ -239,6 +286,7 @@ def client_factory(tmp_path: Path, snkrdunk: RecordedSnkrdunk, fx: RecordedFx):
             sleep=snkrdunk.sleep,
             clock=lambda: now,
             fx_download=fx,
+            heartbeat=heartbeat.build(),
         )
         return TestClient(app)
 
