@@ -11,7 +11,7 @@
 ## 0. 一張圖看懂在跑什麼
 
 ```
-Windows 工作排程器  ──每天 03:00──▶  scripts/crawl.py  ──▶  SNKRDUNK ＋ 臺銀
+Windows 工作排程器  ──每天 20:00──▶  scripts/crawl.py  ──▶  SNKRDUNK ＋ 臺銀
     （即使沒開瀏覽器也會跑）              │
                                         ├──▶  SQLite（成交紀錄 ＋ 爬取帳本）
                                         ├──▶  data/logs/crawl-YYYY-MM-DD.log
@@ -74,7 +74,7 @@ $uv = (Get-Command uv).Source
 $action = New-ScheduledTaskAction -Execute $uv `
     -Argument "run python scripts/crawl.py" `
     -WorkingDirectory "C:\Project\Card_Collection"
-$trigger = New-ScheduledTaskTrigger -Daily -At 03:00
+$trigger = New-ScheduledTaskTrigger -Daily -At 20:00
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -RunOnlyIfNetworkAvailable `
@@ -86,11 +86,38 @@ Register-ScheduledTask -TaskName "CardCollection-DailyCrawl" `
 
 幾個參數不是可有可無的：
 
-- **`-StartWhenAvailable`**：錯過的那一輪在電腦開機後**補跑**。少了它，睡覺時電腦關機
-  就等於那天完全沒爬——而漏掉的成交補不回來（ADR-0019）。
+- **`-StartWhenAvailable`**：錯過的那一輪在電腦開機後**補跑**。它是**安全網，不是主要
+  機制**——見下面「為什麼是晚上 8 點」。少了它，臨時關機那天就完全沒爬，而漏掉的成交
+  補不回來（ADR-0019）。
 - **`-RunOnlyIfNetworkAvailable`**：沒網路時不跑，免得在帳本上留下一筆假的失敗。
 - **`-ExecutionTimeLimit 30 分鐘`**：與帳本的鎖自解門檻一致（`STALE_LOCK_MINUTES`）。
   一輪只要 1.7 分鐘，掛著 30 分鐘的不是慢，是死了。
+
+### 為什麼是晚上 8 點
+
+**唯一重要的條件是「那個時間你的電腦通常開著」。** 20:00 不是算出來的，是照這條規則挑的。
+
+一個直覺的選擇是半夜跑（離峰、不跟自己搶網路），但那個直覺會**弄壞死人開關**：
+
+```
+昨天 09:10  開機後補跑成功，心跳送出          ✅
+今天 03:00  排程時間到 —— 電腦是關的，什麼都沒發生
+今天 05:10  healthchecks 等超過 24+2 小時 → 手機收到「掛了」通知   ❌
+今天 09:15  你開機，補跑成功，心跳送出 → 恢復綠燈                  ✅
+```
+
+**系統其實好好的，但每天早上都會收到一次假警報。** 收個三天就不會再有人認真看那個
+通知了——那比沒有通知更糟。
+
+因此**排程時間與 §4 的 Grace Time 必須對齊**：把排程放在電腦一定開著的時段，
+`-StartWhenAvailable` 就退回它該待的位置——只在臨時關機時救一次，而不是天天靠它。
+
+放棄半夜的代價只有一項：台灣 03:00 剛好是日本 04:00，前一個「日本日」已完整結束，
+而 20:00 是日本 21:00，當天還沒過完。**這個代價趨近於零**——兩次爬取之間仍然是 24
+小時，每張卡「最新 20 筆」要涵蓋的時間長度完全沒變，只是窗口的起點不同。
+
+至於「跑的時候人在用電腦」：一輪 105 秒，其中 75% 是刻意的禮貌間隔（在等，不是在算），
+你多半不會察覺。
 
 **驗證它註冊成功**（這只是讀取，不會執行）：
 
@@ -155,7 +182,9 @@ Register-ScheduledTask -TaskName "CardCollection-Web" `
 1. 到 <https://healthchecks.io> 註冊（**免費方案足夠**，一個 check 就夠了，不需要付費）。
 2. 建立一個 check，設定：
    - **Period（週期）**：`1 day`——你每天爬一次。
-   - **Grace Time（寬限）**：`2 hours`——爬取本身只要 2 分鐘，寬限是留給「補跑」用的。
+   - **Grace Time（寬限）**：`2 hours`——爬取本身只要 2 分鐘，寬限是留給臨時晚開機的。
+     **這個值與 §2 的排程時間綁在一起**：若之後把排程改到電腦不一定開著的時段，寬限
+     必須跟著放寬（否則每天收假警報），或乾脆把排程搬回開著的時段。
    - **Notification（通知）**：加上手機能收到的管道（email／Telegram／推播）。
 3. 複製它給的 **Ping URL**，長得像 `https://hc-ping.com/xxxxxxxx-xxxx-...`。
 
