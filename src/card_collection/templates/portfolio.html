@@ -32,6 +32,38 @@
   #crawl-report .fxdown { color: #b45309; }
   .slot { border: 1px dashed #9ca3af; border-radius: 4px; padding: 2rem 1.2rem; margin: 1.5rem 0 0; color: #6b7280; font-size: .9rem; text-align: center; }
   .slot strong { display: block; font-size: 1rem; color: #4b5563; margin-bottom: .3rem; }
+  /* 卡圖牆。窄螢幕優先：格子自己換行，頁面本身永不橫向捲動——這正是表格骨架的痛點。
+     分頁用 radio ＋ :checked 切換，不動 JS：唯讀的畫面沒有理由等腳本跑完才長出來。 */
+  .wall { margin: 2rem 0 0; }
+  .wall > input { position: absolute; opacity: 0; pointer-events: none; }
+  .wall .tabs { display: flex; gap: .3rem; border-bottom: 1px solid #d1d5db; }
+  .wall .tabs label { font-size: .9rem; padding: .45rem .9rem; border: 1px solid transparent; border-bottom: none; border-radius: 4px 4px 0 0; color: #6b7280; cursor: pointer; }
+  #wall-tab-held:checked ~ .tabs label[for="wall-tab-held"],
+  #wall-tab-sold:checked ~ .tabs label[for="wall-tab-sold"] { color: inherit; font-weight: 600; border-color: #d1d5db; background: rgba(107, 114, 128, .08); }
+  #wall-tab-held:focus-visible ~ .tabs label[for="wall-tab-held"],
+  #wall-tab-sold:focus-visible ~ .tabs label[for="wall-tab-sold"] { outline: 2px solid #2563eb; outline-offset: 2px; }
+  .wall .grid { display: none; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .9rem; margin: 1.2rem 0 0; }
+  #wall-tab-held:checked ~ #wall-held, #wall-tab-sold:checked ~ #wall-sold { display: grid; }
+  .wall .cell { border: 1px solid #d1d5db; border-radius: 6px; padding: .6rem; }
+  .wall summary { list-style: none; cursor: pointer; }
+  .wall summary::-webkit-details-marker { display: none; }
+  .wall .art { display: block; width: 100%; aspect-ratio: 10/7; object-fit: contain; background: #f3f4f6; border-radius: 4px; }
+  .wall .name { display: block; margin-top: .45rem; font-size: .86rem; line-height: 1.35; }
+  .wall .code { display: block; font-family: ui-monospace, monospace; font-size: .72rem; color: #6b7280; }
+  .wall .rate { display: block; margin-top: .2rem; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .wall .rate.up { color: #0b7a4b; }
+  .wall .rate.down { color: #b91c1c; }
+  .wall .rate.unvalued { font-size: .78rem; font-weight: 400; color: #9ca3af; }
+  .wall dl { margin: .6rem 0 0; padding-top: .6rem; border-top: 1px solid #e5e7eb; font-size: .8rem; }
+  .wall dt { font-size: .7rem; letter-spacing: .06em; color: #6b7280; }
+  .wall dd { margin: 0 0 .5rem; font-variant-numeric: tabular-nums; }
+  .wall dd:last-child { margin: 0; }
+  .wall .lots { margin: .15rem 0 0; padding: 0; list-style: none; color: #4b5563; }
+  .wall .sample { display: block; font-size: .72rem; color: #6b7280; }
+  /* 「這個卡種近期沒有成交」與 .freshness.stale 的「整個系統沒能更新」是兩件事，
+     兩者刻意用不同的類別名，免得日後被當成同一種警示改在一起。 */
+  .wall .expired { display: block; font-size: .72rem; color: #b45309; }
+  .wall .empty { color: #6b7280; font-size: .9rem; }
 </style>
 </head>
 <body>
@@ -90,17 +122,102 @@
   </div>
   <div id="crawl-report"></div>
 
-  {# 走勢圖與卡圖牆各自有票，這裡先留位置。留白處明說在等什麼，比留一片空白誠實
+  {# 走勢圖另有一票，這裡先留位置。留白處明說在等什麼，比留一片空白誠實
      ——空白會被讀成「壞掉了」。 #}
   <div class="slot">
     <strong>走勢圖</strong>
     總市值曲線疊總成本階梯線，含時間區間與逐日涵蓋率。
   </div>
 
-  <div class="slot">
-    <strong>卡圖牆</strong>
-    持有中與已售出兩個分頁，一格一個卡種。
-  </div>
+  {# 卡圖牆：一格一個卡種，用認圖的方式找卡，而不是讀字。同一個卡種可以同時出現在
+     兩個分頁——賣掉兩張、還持有三張是正常狀態。 #}
+  <section class="wall">
+    <input type="radio" name="wall-tab" id="wall-tab-held" checked>
+    <input type="radio" name="wall-tab" id="wall-tab-sold">
+    <div class="tabs">
+      <label for="wall-tab-held">持有中（{{ wall.held|length }}）</label>
+      <label for="wall-tab-sold">已售出（{{ wall.sold|length }}）</label>
+    </div>
+
+    <div class="grid" id="wall-held">
+      {% for cell in wall.held %}
+      <details class="cell">
+        <summary>
+          {% if cell.apparel_id %}
+          <img class="art" src="/api/cards/{{ cell.apparel_id }}/image" alt="" loading="lazy">
+          {% else %}
+          <span class="art"></span>
+          {% endif %}
+          <span class="name">{{ cell.card_name_raw }}</span>
+          <span class="code">{{ cell.series_raw }} #{{ cell.number_raw }}{% if cell.held_count > 1 %}・{{ cell.held_count }} 張{% endif %}</span>
+          {% if cell.return_rate is defined %}
+          <span class="rate {{ 'up' if cell.return_rate > 0 else 'down' if cell.return_rate < 0 else '' }}">{{ "{:+.1%}".format(cell.return_rate) }}</span>
+          {% else %}
+          <span class="rate unvalued">尚無市值</span>
+          {% endif %}
+        </summary>
+        <dl>
+          <dt>成本</dt>
+          <dd>
+            {{ "{:,}".format(cell.held_cost_twd) }}
+            {% if cell.held_count > 1 %}
+            {# 一格是一個卡種，但成本是一張一張付的，逐張列出才對得起帳。 #}
+            <ul class="lots">
+              {% for holding in cell.holdings %}
+              <li>{{ holding.purchase_date }} 購入 {{ "{:,}".format(holding.cost_twd) }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </dd>
+          <dt>市值</dt>
+          <dd>
+            {% if cell.market_value %}
+              {{ "{:,}".format(cell.market_value.market_value_twd) }}{% if cell.held_count > 1 %}／張，共 {{ "{:,}".format(cell.held_market_value_twd) }}{% endif %}
+              <span class="sample">{{ cell.market_value.sample_count }} 筆成交／{{ cell.market_value.sample_from }}～{{ cell.market_value.sample_to }}</span>
+              {% if cell.market_value.stale_days %}
+              <span class="expired">已過期 {{ cell.market_value.stale_days }} 天</span>
+              {% endif %}
+            {% else %}
+              尚未算得出（還沒對應到 SNKRDUNK，或還沒抓到成交紀錄）
+            {% endif %}
+          </dd>
+          {% if cell.unrealized_pnl_twd is defined %}
+          <dt>未實現損益</dt>
+          <dd class="{{ 'rate up' if cell.unrealized_pnl_twd > 0 else 'rate down' if cell.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(cell.unrealized_pnl_twd) }}</dd>
+          {% endif %}
+        </dl>
+      </details>
+      {% else %}
+      <p class="empty">還沒有持有中的持有品。</p>
+      {% endfor %}
+    </div>
+
+    {# 已售出不必展開：成本與淨賺都是終局的數字，不會再變。 #}
+    <div class="grid" id="wall-sold">
+      {% for cell in wall.sold %}
+      <div class="cell">
+        {% if cell.apparel_id %}
+        <img class="art" src="/api/cards/{{ cell.apparel_id }}/image" alt="" loading="lazy">
+        {% else %}
+        <span class="art"></span>
+        {% endif %}
+        <span class="name">{{ cell.card_name_raw }}</span>
+        <span class="code">{{ cell.series_raw }} #{{ cell.number_raw }}{% if cell.sold_count > 1 %}・{{ cell.sold_count }} 張{% endif %}</span>
+        <span class="rate {{ 'up' if cell.return_rate > 0 else 'down' if cell.return_rate < 0 else '' }}">{{ "{:+.1%}".format(cell.return_rate) }}</span>
+        <dl>
+          <dt>成本</dt>
+          <dd>{{ "{:,}".format(cell.sold_cost_twd) }}</dd>
+          <dt>淨賺</dt>
+          <dd class="{{ 'rate up' if cell.realized_pnl_twd > 0 else 'rate down' if cell.realized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(cell.realized_pnl_twd) }}</dd>
+          <dt>售出日</dt>
+          <dd>{{ cell.sold_date }}</dd>
+        </dl>
+      </div>
+      {% else %}
+      <p class="empty">還沒有已售出的持有品。</p>
+      {% endfor %}
+    </div>
+  </section>
 </div>
 
 {% include "_market_script.html" %}

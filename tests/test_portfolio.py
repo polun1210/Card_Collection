@@ -1,8 +1,8 @@
 """Portfolio 首頁的外部行為。
 
 首頁是「打開就看到自己的收藏」，不是後台工具——待審佇列因此搬到 `/queue`，功能
-一字不改。走勢圖與卡圖牆由後續票填入，本票只保證這一頁的**總計數字**與**行情新
-鮮度**是真的。
+一字不改。走勢圖由後續票填入，卡圖牆的行為在 test_card_wall.py，本檔只保證這一頁的
+**總計數字**與**行情新鮮度**是真的。
 
 總計數字不重算一份：首頁與持有品頁必須逐欄一致，否則同一批持有品會有兩套帳。
 """
@@ -95,7 +95,9 @@ def test_portfolio端點回傳總計與行情新鮮度(client):
     body = _portfolio(client)
 
     # Assert
-    assert set(body) == {"summary", "freshness"}
+    # 只查這兩塊在不在。首頁要的一切一次拿齊，這個回應會隨著卡圖牆、走勢圖繼續長，
+    # 逐字比對整組 key 只會讓每張新票都來改這一行。
+    assert {"summary", "freshness"} <= set(body)
 
 
 def test_首頁總計與持有品摘要端點逐欄一致(client, confirm_card, crawl):
