@@ -20,6 +20,7 @@ from .holdings import (
 from .images import IMAGE_MEDIA_TYPE, CardImageError
 from .mapping import DEFAULT_BATCH_SIZE, MappingService
 from .market import MarketService
+from .portfolio import overview
 from .repository import CardKindExists, MappingCandidateRepository
 
 router = APIRouter()
@@ -448,6 +449,32 @@ def create_card_kind(body: CardKindRequest, repository: Repository) -> dict:
     return repository.find_kind(row_id)
 
 
+@router.get("/api/portfolio")
+def read_portfolio(
+    holdings: Holdings, market: Market, runs: CrawlRuns, clock: Clock
+) -> dict:
+    """首頁要的一切，一次拿齊。走勢圖與卡圖牆之後加進同一個回應。"""
+    rows = with_market_values(holdings.list_all(), market.values())
+    return {
+        "summary": overview(summarize(rows)),
+        "freshness": freshness(runs.latest(), runs.last_succeeded(), clock()),
+    }
+
+
+@router.get("/", response_class=HTMLResponse)
+def read_portfolio_page(
+    request: Request,
+    holdings: Holdings,
+    market: Market,
+    runs: CrawlRuns,
+    clock: Clock,
+) -> HTMLResponse:
+    """打開就看到自己的收藏，不是後台工具——待審佇列因此在 /queue。"""
+    return request.app.state.templates.TemplateResponse(
+        request, "portfolio.html", read_portfolio(holdings, market, runs, clock)
+    )
+
+
 @router.get("/holdings", response_class=HTMLResponse)
 def read_holdings_page(
     request: Request,
@@ -499,7 +526,7 @@ def _group_by_kind(rows: Iterable[dict], values: dict[int, dict]) -> list[dict]:
     return list(grouped.values())
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/queue", response_class=HTMLResponse)
 def read_queue_page(
     request: Request,
     repository: Repository,

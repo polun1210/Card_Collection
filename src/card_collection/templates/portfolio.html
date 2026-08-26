@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>收藏總覽</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: "Noto Sans TC", system-ui, sans-serif; margin: 0; padding: 2rem 1.5rem 4rem; line-height: 1.6; }
+  .wrap { max-width: 78rem; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 .3rem; }
+  .totals { display: flex; flex-wrap: wrap; gap: 2.5rem; margin: 1.2rem 0 .6rem; }
+  .total .label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; display: block; }
+  .total .value { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .value.up { color: #0b7a4b; }
+  .value.down { color: #b91c1c; }
+  .hint { color: #6b7280; font-size: .9rem; margin: 0 0 1.5rem; }
+  .toolbar { display: flex; align-items: baseline; gap: 1rem; margin: 2rem 0 .8rem; flex-wrap: wrap; }
+  .toolbar a { font-size: .84rem; }
+  button { font: inherit; font-size: .86rem; padding: .3rem .9rem; border-radius: 4px; border: 1px solid #9ca3af; background: transparent; color: inherit; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  /* 以下兩組規則與 _market_freshness.html、_market_script.html 的 markup 對應。
+     樣式刻意留在各頁自己的 <style> 裡——版面之後會由 UIUX 階段重做，共用樣式會
+     讓兩頁被綁在一起改。行為共用，外觀不共用。 */
+  .freshness { font-size: .86rem; color: #4b5563; border: 1px solid #d1d5db; border-left-width: 4px; border-radius: 4px; padding: .55rem .8rem; margin: 1.5rem 0 0; }
+  .freshness.stale { border-color: #b45309; border-left-color: #b45309; color: #b45309; background: rgba(180, 83, 9, .06); }
+  .freshness .failed { display: block; margin-top: .35rem; color: #b91c1c; }
+  .freshness .running { display: block; margin-top: .35rem; }
+  #crawl-report { display: none; margin: .6rem 0 0; padding: .7rem .9rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: .86rem; }
+  #crawl-report ul { margin: .4rem 0 0; padding-left: 1.2rem; }
+  #crawl-report.bad { border-color: #b91c1c; color: #b91c1c; }
+  #crawl-report .fxdown { color: #b45309; }
+  .slot { border: 1px dashed #9ca3af; border-radius: 4px; padding: 2rem 1.2rem; margin: 1.5rem 0 0; color: #6b7280; font-size: .9rem; text-align: center; }
+  .slot strong { display: block; font-size: 1rem; color: #4b5563; margin-bottom: .3rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>收藏總覽</h1>
+
+  <div class="totals">
+    {% if summary.valued_count %}
+    <div class="total">
+      <span class="label">未實現損益</span>
+      <span class="value {{ 'up' if summary.unrealized_pnl_twd > 0 else 'down' if summary.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(summary.unrealized_pnl_twd) }}</span>
+    </div>
+    <div class="total">
+      <span class="label">報酬率</span>
+      <span class="value {{ 'up' if summary.unrealized_return_rate > 0 else 'down' if summary.unrealized_return_rate < 0 else '' }}">{{ "{:+.1%}".format(summary.unrealized_return_rate) }}</span>
+    </div>
+    {% endif %}
+    <div class="total">
+      <span class="label">已實現損益</span>
+      <span class="value {{ 'up' if summary.realized_pnl_twd > 0 else 'down' if summary.realized_pnl_twd < 0 else '' }}">{{ "{:,}".format(summary.realized_pnl_twd) }}</span>
+    </div>
+    <div class="total">
+      <span class="label">持有中</span>
+      <span class="value">{{ summary.held_count }} 張</span>
+    </div>
+    <div class="total">
+      <span class="label">持有中總成本</span>
+      <span class="value">{{ "{:,}".format(summary.held_cost_twd) }}</span>
+    </div>
+    {% if summary.valued_count %}
+    <div class="total">
+      <span class="label">持有中總市值</span>
+      <span class="value">{{ "{:,}".format(summary.held_market_value_twd) }}</span>
+    </div>
+    {% endif %}
+    <div class="total">
+      <span class="label">已售出</span>
+      <span class="value">{{ summary.sold_count }} 張</span>
+    </div>
+  </div>
+  <p class="hint">
+    金額一律新台幣。未實現損益（持有中，市值 − 成本）與已實現損益（已售出，售出價 − 成本）分開計算，不混入同一個數字。
+    報酬率為未實現損益對持有成本，只涵蓋算得出市值的那幾張。
+    {% if summary.unvalued_count %}
+      持有中還有 {{ summary.unvalued_count }} 張沒有市值（尚未對應到 SNKRDUNK，或還沒抓到成交紀錄），
+      未列入總市值、未實現損益與報酬率——這三個數字目前只涵蓋 {{ summary.valued_count }} 張。
+    {% endif %}
+  </p>
+
+  {% include "_market_freshness.html" %}
+
+  <div class="toolbar">
+    <button id="crawl" onclick="crawlMarket(this)">更新行情</button>
+    <a href="/holdings">持有品逐筆明細</a>
+    <a href="/queue">待審佇列</a>
+  </div>
+  <div id="crawl-report"></div>
+
+  {# 走勢圖與卡圖牆各自有票，這裡先留位置。留白處明說在等什麼，比留一片空白誠實
+     ——空白會被讀成「壞掉了」。 #}
+  <div class="slot">
+    <strong>走勢圖</strong>
+    總市值曲線疊總成本階梯線，含時間區間與逐日涵蓋率。
+  </div>
+
+  <div class="slot">
+    <strong>卡圖牆</strong>
+    持有中與已售出兩個分頁，一格一個卡種。
+  </div>
+</div>
+
+{% include "_market_script.html" %}
+</body>
+</html>

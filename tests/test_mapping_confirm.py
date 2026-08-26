@@ -183,22 +183,22 @@ def test_查無卡種時回404(client):
     assert client.get("/api/cards/999999").status_code == 404
 
 
-def test_首頁提供確認與否決的操作(client):
+def test_佇列頁提供確認與否決的操作(client):
     # Act
-    html = client.get("/").text
+    html = client.get("/queue").text
 
     # Assert
     assert "確認" in html and "都不是" in html
     assert "/api/mapping/confirm" in html
 
 
-def test_首頁列出已確認的卡種並可推翻(client):
+def test_佇列頁列出已確認的卡種並可推翻(client):
     # Arrange
     row = _find(client, "M2a", "228", "MEGA Lucario")
     _confirm(client, row["id"], MEGA_LUCARIO[0])
 
     # Act
-    html = client.get("/").text
+    html = client.get("/queue").text
 
     # Assert
     assert "推翻" in html
