@@ -128,9 +128,9 @@ def test_原始CSV未被程式寫入(client, notion_csv: Path):
     assert hashlib.sha256(notion_csv.read_bytes()).hexdigest() == digest_before
 
 
-def test_首頁列出全部待確認卡種(client):
+def test_佇列頁列出全部待確認卡種(client):
     # Act
-    response = client.get("/")
+    response = client.get("/queue")
 
     # Assert
     assert response.status_code == 200

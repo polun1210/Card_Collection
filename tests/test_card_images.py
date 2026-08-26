@@ -138,12 +138,12 @@ def test_全部處理完後待處理歸零(client):
     assert client.get("/api/mapping/queue").json() == []
 
 
-def test_首頁的已確認卡種顯示本機卡圖(client):
+def test_佇列頁的已確認卡種顯示本機卡圖(client):
     # Arrange
     _confirm_mega_lucario(client)
 
     # Act
-    html = client.get("/").text
+    html = client.get("/queue").text
 
     # Assert
     assert f"/api/cards/{MEGA_LUCARIO}/image" in html

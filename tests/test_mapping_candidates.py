@@ -119,9 +119,9 @@ def test_對SNKRDUNK的請求之間有間隔(client, snkrdunk):
     assert all(seconds > 0 for seconds in snkrdunk.sleeps)
 
 
-def test_首頁顯示候選卡圖(client):
+def test_佇列頁顯示候選卡圖(client):
     # Act
-    html = client.get("/").text
+    html = client.get("/queue").text
 
     # Assert
     assert "https://cdn.snkrdunk.com/" in html
@@ -162,13 +162,13 @@ def test_候選缺少卡圖時不靜默收下(client, snkrdunk):
     assert client.get("/api/mapping/queue").json()[0]["candidates"] == []
 
 
-def test_首頁第二次載入不再打外部(client, snkrdunk):
+def test_佇列頁第二次載入不再打外部(client, snkrdunk):
     # Arrange
-    client.get("/", params={"limit": 14})
+    client.get("/queue", params={"limit": 14})
     first_call_count = len(snkrdunk.requests)
 
     # Act
-    client.get("/", params={"limit": 14})
+    client.get("/queue", params={"limit": 14})
 
     # Assert：補的必須是顯示中的那一批，否則每次載入都在抓下一批
     assert first_call_count > 0
