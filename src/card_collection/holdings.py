@@ -4,10 +4,14 @@ import sqlite3
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 
+from .holding_rules import HoldingFields
 from .notion_csv import HoldingRow
 
 STATUS_HELD = "held"
 STATUS_SOLD = "sold"
+
+# 本系統只認識寶可夢卡的 PSA 10，手動記帳時不必每次輸入。
+DEFAULT_GRADING = "PSA 10"
 
 _SELECT_HOLDINGS = """
 SELECT holding.id,
@@ -168,6 +172,73 @@ class HoldingRepository:
             (apparel_id,),
         )
         return tuple(_to_holding(row) for row in rows)
+
+    def find(self, holding_id: int) -> dict | None:
+        row = self._connection.execute(
+            f"{_SELECT_HOLDINGS} WHERE holding.id = ?", (holding_id,)
+        ).fetchone()
+        return None if row is None else _to_holding(row)
+
+    def add(
+        self,
+        mapping_candidate_id: int,
+        fields: HoldingFields,
+        now: datetime,
+        grading_raw: str = DEFAULT_GRADING,
+    ) -> int:
+        """手動記一筆。來源列號留空——匯入來的有列號，手動記的沒有。"""
+        with self._connection:
+            cursor = self._connection.execute(
+                """
+                INSERT INTO holding
+                    (mapping_candidate_id, purchase_date, purchase_date_raw, cost_twd,
+                     sold_date, sold_date_raw, sold_price_twd, grading_raw,
+                     source_row_number, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+                """,
+                (
+                    mapping_candidate_id,
+                    fields.purchase_date,
+                    fields.purchase_date_raw,
+                    fields.cost_twd,
+                    fields.sold_date,
+                    fields.sold_date_raw,
+                    fields.sold_price_twd,
+                    grading_raw,
+                    now.isoformat(),
+                ),
+            )
+        return int(cursor.lastrowid)
+
+    def update(
+        self, holding_id: int, mapping_candidate_id: int, fields: HoldingFields
+    ) -> None:
+        """整筆覆寫已驗證過的欄位。部分更新的合併發生在驗證之前，不在這裡。"""
+        with self._connection:
+            self._connection.execute(
+                """
+                UPDATE holding
+                   SET mapping_candidate_id = ?, purchase_date = ?,
+                       purchase_date_raw = ?, cost_twd = ?, sold_date = ?,
+                       sold_date_raw = ?, sold_price_twd = ?
+                 WHERE id = ?
+                """,
+                (
+                    mapping_candidate_id,
+                    fields.purchase_date,
+                    fields.purchase_date_raw,
+                    fields.cost_twd,
+                    fields.sold_date,
+                    fields.sold_date_raw,
+                    fields.sold_price_twd,
+                    holding_id,
+                ),
+            )
+
+    def delete(self, holding_id: int) -> None:
+        """真的刪掉，不留廢棄列——留著就等於每個查詢都要記得排除它，忘一個就錯帳。"""
+        with self._connection:
+            self._connection.execute("DELETE FROM holding WHERE id = ?", (holding_id,))
 
     def list_imports(self) -> tuple[dict, ...]:
         rows = self._connection.execute(

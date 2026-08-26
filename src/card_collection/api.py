@@ -10,11 +10,17 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
 from .crawl_runs import CrawlRunInProgress, CrawlRunRepository, freshness
-from .holdings import HoldingRepository, summarize, with_market_values
+from .holding_rules import HoldingFields, HoldingRuleError, merge, validate
+from .holdings import (
+    DEFAULT_GRADING,
+    HoldingRepository,
+    summarize,
+    with_market_values,
+)
 from .images import IMAGE_MEDIA_TYPE, CardImageError
 from .mapping import DEFAULT_BATCH_SIZE, MappingService
 from .market import MarketService
-from .repository import MappingCandidateRepository
+from .repository import CardKindExists, MappingCandidateRepository
 
 router = APIRouter()
 
@@ -279,6 +285,167 @@ def read_card_holdings(card: CardRow, holdings: Holdings, market: Market) -> dic
         "summary": summarize(rows),
         "market_value": market.value_for(apparel_id),
     }
+
+
+class HoldingCreateRequest(BaseModel):
+    mapping_candidate_id: int
+    cost_twd: int
+    # 省略時為今天。絕大多數情況是當天記帳，但補登昨天的交易也必須做得到。
+    purchase_date: str | None = None
+    grading_raw: str = DEFAULT_GRADING
+
+
+class HoldingPatchRequest(BaseModel):
+    """部分更新。沒送出的欄位沿用舊值，**明確送出 null 就是清空**。
+
+    分得出這兩者是把誤標的售出改回持有中的唯一辦法。
+    """
+
+    mapping_candidate_id: int | None = None
+    purchase_date: str | None = None
+    cost_twd: int | None = None
+    sold_date: str | None = None
+    sold_price_twd: int | None = None
+
+
+class SaleRequest(BaseModel):
+    sold_price_twd: int
+    sold_date: str | None = None
+
+
+class CardKindRequest(BaseModel):
+    series_raw: str
+    number_raw: str
+    card_name_raw: str
+
+
+def _require_holding(holdings: HoldingRepository, holding_id: int) -> dict:
+    holding = holdings.find(holding_id)
+    if holding is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="查無此持有品"
+        )
+    return holding
+
+
+def _require_kind(repository: MappingCandidateRepository, row_id: int) -> dict:
+    kind = repository.find_kind(row_id)
+    if kind is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="查無此卡種列"
+        )
+    return kind
+
+
+def _validated(merged: dict, today) -> HoldingFields:
+    """規則不合格是使用者的輸入問題，回 400 並照實說出是哪個欄位、為什麼。"""
+    try:
+        return validate(
+            merged["purchase_date_raw"],
+            merged["cost_twd"],
+            merged["sold_date_raw"],
+            merged["sold_price_twd"],
+            today,
+        )
+    except HoldingRuleError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+        ) from error
+
+
+@router.post("/api/holdings")
+def create_holding(
+    body: HoldingCreateRequest,
+    holdings: Holdings,
+    repository: Repository,
+    clock: Clock,
+) -> dict:
+    """手動記一筆購入。持有品掛在卡種列上（ADR-0012），卡種不存在就不收。"""
+    _require_kind(repository, body.mapping_candidate_id)
+    now = clock()
+    fields = _validated(
+        {
+            "purchase_date_raw": body.purchase_date or now.date().isoformat(),
+            "cost_twd": body.cost_twd,
+            "sold_date_raw": None,
+            "sold_price_twd": None,
+        },
+        now.date(),
+    )
+    holding_id = holdings.add(
+        body.mapping_candidate_id, fields, now, body.grading_raw
+    )
+    return holdings.find(holding_id)
+
+
+@router.patch("/api/holdings/{holding_id}")
+def update_holding(
+    holding_id: int,
+    body: HoldingPatchRequest,
+    holdings: Holdings,
+    repository: Repository,
+    clock: Clock,
+) -> dict:
+    """驗證的一律是**合併後的完整結果**，否則部分更新就成了繞過規則的後門。"""
+    existing = _require_holding(holdings, holding_id)
+    changes = body.model_dump(exclude_unset=True)
+    kind_id = changes.pop("mapping_candidate_id", None) or existing[
+        "mapping_candidate_id"
+    ]
+    _require_kind(repository, kind_id)
+    fields = _validated(merge(existing, changes), clock().date())
+    holdings.update(holding_id, kind_id, fields)
+    return holdings.find(holding_id)
+
+
+@router.post("/api/holdings/{holding_id}/sale")
+def sell_holding(
+    holding_id: int, body: SaleRequest, holdings: Holdings, clock: Clock
+) -> dict:
+    """賣掉哪一張由使用者指定（ADR-0009），系統不自動挑。
+
+    已售出者回 409：覆蓋掉原本的售出紀錄等於安靜地改寫已實現損益。
+    """
+    existing = _require_holding(holdings, holding_id)
+    if existing["sold_date"] is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="這筆持有品已經售出"
+        )
+    now = clock()
+    fields = _validated(
+        merge(
+            existing,
+            {
+                "sold_date": body.sold_date or now.date().isoformat(),
+                "sold_price_twd": body.sold_price_twd,
+            },
+        ),
+        now.date(),
+    )
+    holdings.update(holding_id, existing["mapping_candidate_id"], fields)
+    return holdings.find(holding_id)
+
+
+@router.delete("/api/holdings/{holding_id}")
+def delete_holding(holding_id: int, holdings: Holdings) -> dict[str, int]:
+    _require_holding(holdings, holding_id)
+    holdings.delete(holding_id)
+    return {"deleted": holding_id}
+
+
+@router.post("/api/card-kinds")
+def create_card_kind(body: CardKindRequest, repository: Repository) -> dict:
+    """新增的卡種進入待確認清單，沿用既有的搜尋 → 確認 → 抓卡圖流程。"""
+    try:
+        row_id = repository.add_kind(
+            body.series_raw, body.number_raw, body.card_name_raw
+        )
+    except CardKindExists as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"id": error.existing_id, "message": str(error)},
+        ) from error
+    return repository.find_kind(row_id)
 
 
 @router.get("/holdings", response_class=HTMLResponse)

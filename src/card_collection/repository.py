@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
+from .normalization import normalize_card_number, normalize_series
 from .notion_csv import CardKind
 from .snkrdunk import Apparel
 
@@ -18,9 +19,54 @@ _QUEUE_COLUMNS = (
 _STABLE_ORDER = "ORDER BY series_normalized, number_normalized, card_name_raw"
 
 
+class CardKindExists(Exception):
+    """這個卡種已經有一列了。帶著既有那一列的 id，讓呼叫端說得出是哪一個。
+
+    兩個代表同一張卡的卡種列會讓持有品分裂到兩邊，市值也跟著分裂——而且兩邊看起來
+    都是對的。
+    """
+
+    def __init__(self, existing_id: int) -> None:
+        super().__init__(f"這個卡種已經在清單裡（第 {existing_id} 列）")
+        self.existing_id = existing_id
+
+
 class MappingCandidateRepository:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
+
+    def add_kind(
+        self, series_raw: str, number_raw: str, card_name_raw: str
+    ) -> int:
+        """手動新增一個卡種列，狀態為待確認。
+
+        新的卡種因此自動落進既有的待確認清單，沿用已經寫好的搜尋 → 確認 → 抓卡圖
+        流程。正規化規則與 `seed()` 共用，系列代碼一樣永不收斂（ADR-0011）。
+        """
+        try:
+            with self._connection:
+                cursor = self._connection.execute(
+                    """
+                    INSERT INTO card_mapping_candidate
+                        (series_raw, number_raw, card_name_raw,
+                         series_normalized, number_normalized, status)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        series_raw,
+                        number_raw,
+                        card_name_raw,
+                        normalize_series(series_raw),
+                        normalize_card_number(number_raw),
+                        STATUS_PENDING,
+                    ),
+                )
+        except sqlite3.IntegrityError as error:
+            existing = self.ids_by_kind().get(
+                (series_raw, number_raw, card_name_raw)
+            )
+            raise CardKindExists(existing or 0) from error
+        return int(cursor.lastrowid)
 
     def seed(self, kinds: Iterable[CardKind]) -> None:
         """匯入相異卡種。重複執行不會重複匯入，也不會覆寫既有狀態。"""
@@ -44,6 +90,17 @@ class MappingCandidateRepository:
             ],
         )
         self._connection.commit()
+
+    def find_kind(self, row_id: int) -> dict | None:
+        """依 id 取卡種列，**不限狀態**——未確認的卡種也能掛持有品。
+
+        記一筆購入不該被「行情對應還沒做完」擋住。
+        """
+        row = self._connection.execute(
+            f"SELECT {_QUEUE_COLUMNS} FROM card_mapping_candidate WHERE id = ?",
+            (row_id,),
+        ).fetchone()
+        return None if row is None else dict(row)
 
     def ids_by_kind(self) -> dict[tuple[str, str, str], int]:
         """卡種原始三元組 → 卡種列 id，含已確認、已否決與待處理的列。"""
