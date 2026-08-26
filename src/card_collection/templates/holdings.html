@@ -99,30 +99,7 @@
     {% endif %}
   </p>
 
-  <div class="freshness{{ ' stale' if freshness.is_stale else '' }}">
-    {% if freshness.never_succeeded %}
-      <strong>從未成功更新過行情。</strong>
-      畫面上若有市值，全部來自更早以前的資料；沒有市值的卡種不會被填上任何編出來的數字。
-    {% else %}
-      上次更新行情：<strong>{{ freshness.age_label }}前</strong>（{{ freshness.last_success.finished_at[:16].replace('T', ' ') }}）
-      {%- if freshness.is_stale %}
-        —— <strong>已超過 24 小時沒有成功更新</strong>。排程可能沒跑、電腦關機，或來源出了問題。
-      {%- endif %}
-    {% endif %}
-    {% if freshness.latest and freshness.latest.status == 'running' %}
-      <span class="running">目前有一輪正在進行中。</span>
-    {% elif freshness.latest and freshness.latest.status == 'failed' %}
-      <span class="failed">上一輪失敗：{{ freshness.latest.error }}</span>
-    {% endif %}
-    {% if freshness.latest and freshness.latest.fx_error %}
-      <span class="failed">上一輪的匯率沒抓到：{{ freshness.latest.fx_error }}（成交已用日圓原幣入庫，一筆都沒丟）</span>
-    {% endif %}
-    {% if freshness.latest and freshness.latest.failures %}
-      <span class="failed">上一輪有 {{ freshness.latest.failures|length }} 個卡種抓失敗：
-        {% for failure in freshness.latest.failures %}{{ failure.card_name_raw }}（{{ failure.series_raw }} #{{ failure.number_raw }}）：{{ failure.reason }}{{ "；" if not loop.last }}{% endfor %}
-      </span>
-    {% endif %}
-  </div>
+  {% include "_market_freshness.html" %}
 
   <div class="toolbar">
     <h2>依卡種</h2>
@@ -287,67 +264,10 @@
   </menu>
 </dialog>
 
+{% include "_market_script.html" %}
 <script>
   const TODAY = "{{ today }}";
 
-  const escapeHtml = (value) => String(value).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-
-  function renderReport(body) {
-    // 這一輪到底做了什麼要留在畫面上，所以不自動重新整理——
-    // 一重整就把「哪幾張失敗」沖掉了。
-    const t = body.totals;
-    const lines = [
-      `更新完成：${t.cards} 個卡種、抓到 ${t.fetched} 筆、新增 ${t.inserted} 筆、待審 ${t.quarantined} 筆。`,
-      `失敗 ${t.failed} 個、尚未對應而跳過 ${t.skipped} 個。`,
-      `匯率換算 ${body.fx.converted} 筆。`,
-    ];
-    let html = lines.map(escapeHtml).join("<br>");
-    if (body.fx.error) {
-      // 匯率抓不到是外部故障，不是資料問題。說成後者就是安靜說謊。
-      html = '<strong class="fxdown">匯率沒抓到：' + escapeHtml(body.fx.error) + "</strong>"
-        + "<br>成交已用日圓原幣入庫，一筆都沒丟。等來源恢復後再按一次「更新行情」即可補上換算。<br>"
-        + html;
-    }
-    if (body.failed.length) {
-      html += "<ul>" + body.failed
-        .map((card) => `<li>${escapeHtml(card.card_name_raw)}（${escapeHtml(card.series_raw)} #${escapeHtml(card.number_raw)}）：${escapeHtml(card.reason)}</li>`)
-        .join("") + "</ul>";
-    }
-    if (body.cards.length) {
-      html += "<details><summary>逐張卡的明細</summary><ul>" + body.cards
-        .map((card) => `<li>${escapeHtml(card.card_name_raw)}（${escapeHtml(card.series_raw)} #${escapeHtml(card.number_raw)}）：抓到 ${card.fetched} 筆、新增 ${card.inserted} 筆、待審 ${card.quarantined} 筆</li>`)
-        .join("") + "</ul></details>";
-    }
-    html += '<br><a href="/holdings">重新整理看最新市值</a>';
-    return html;
-  }
-
-  async function crawlMarket(button) {
-    const box = document.getElementById("crawl-report");
-    button.disabled = true;
-    box.className = "";
-    box.style.display = "block";
-    box.textContent = "更新中……逐張卡向 SNKRDUNK 取成交紀錄，每次請求之間固定間隔，會花一點時間。";
-    try {
-      const response = await fetch("/api/market/crawl", { method: "POST" });
-      const body = await response.json();
-      if (response.status === 409) {
-        // 已經有一輪在跑（多半是排程）。這不是錯誤，說成失敗會讓人以為壞了。
-        box.textContent = "已經有一輪爬取正在進行中——多半是排程正在跑。等它跑完再重新整理即可。";
-      } else if (!response.ok) {
-        box.className = "bad";
-        box.textContent = "失敗：" + (body.detail?.message || body.detail || response.status);
-      } else {
-        box.innerHTML = renderReport(body);
-      }
-    } catch (error) {
-      // 連線斷掉不代表爬取失敗。同步端點跑在伺服器端的 threadpool 裡，客戶端
-      // 斷線不會中止它——爬取照樣跑完、資料照樣入庫。謊稱失敗會讓人重按一次，
-      // 白白對 SNKRDUNK 送出第二輪。
-      box.textContent = "連線中斷（" + error + "）——爬取可能仍在伺服器端進行。重新整理即可看到真實結果。";
-    }
-    button.disabled = false;
-  }
 
   // --- 持有品的新增、編輯、售出與刪除 -----------------------------------
   //
