@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
+from .card_wall import card_wall
 from .crawl_runs import CrawlRunInProgress, CrawlRunRepository, freshness
 from .holding_rules import HoldingFields, HoldingRuleError, merge, validate
 from .holdings import (
@@ -458,6 +459,7 @@ def read_portfolio(
     return {
         "summary": overview(summarize(rows)),
         "freshness": freshness(runs.latest(), runs.last_succeeded(), clock()),
+        "wall": card_wall(rows),
     }
 
 
