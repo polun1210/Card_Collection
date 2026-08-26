@@ -47,7 +47,7 @@ class MarketService:
         """跑一輪全量爬取。回傳這一輪到底做了什麼，好與壞都寫在裡面。"""
         now = self._clock()
         crawled, failed = self._fetch_all(now)
-        fx = self._convert_pending(now)
+        fx = self.convert_pending(now)
         quarantined = self._sales.quarantined_counts()
         cards = [
             {**card, "quarantined": quarantined.get(card["apparel_id"], 0)}
@@ -99,8 +99,10 @@ class MarketService:
         )
         return filtered.trades
 
-    def _convert_pending(self, now: datetime) -> dict:
+    def convert_pending(self, now: datetime) -> dict:
         """每筆成交以**成交當日**的匯率換算，寫入即固定（ADR-0006）。
+
+        補登腳本也走這裡，不另外實作一份——換算規則只能有一個地方說了算。
 
         回傳這一輪匯率來源的狀況。抓不到就抓不到，但**為什麼**抓不到要說出來——
         把「被機器人驗證擋下」顯示成「查無成交當日匯率」，就是把外部故障說成資料

@@ -27,6 +27,9 @@ from datetime import datetime
 from curl_cffi import requests as curl_requests
 
 BOT_L6M_JPY_URL = "https://rate.bot.com.tw/xrt/flcsv/0/L6M/JPY"
+# 同一個路徑把 L6M 換成 YYYY-MM，就是那個月的牌告，格式與 L6M 完全相同。
+# 平常用不到——L6M 已涵蓋日常爬取；它是補登更早月份時的入口（ADR-0018）。
+BOT_MONTH_JPY_URL = "https://rate.bot.com.tw/xrt/flcsv/0/{month}/JPY"
 FX_SOURCE = "bot-spot-buy"
 # curl_cffi 的模擬目標。它會連同 Chrome 的 header 組一起送，包含 Accept-Language，
 # 所以中文牌告要另外指定——不指定會拿到英文版。
