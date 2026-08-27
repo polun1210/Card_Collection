@@ -42,11 +42,9 @@ def _held_cell(rows: Sequence[dict]) -> dict:
         **_identity(rows[0]),
         "held_count": summary["held_count"],
         "held_cost_twd": summary["held_cost_twd"],
-        # 展開後要逐張列出個別成本：一格是一個卡種，但成本是一張一張付的。
-        "holdings": [
-            {"purchase_date": row["purchase_date"], "cost_twd": row["cost_twd"]}
-            for row in rows
-        ],
+        # 展開後要逐張列出：一格是一個卡種，但成本是一張一張付的，售出的也是
+        # 一張一張賣的（ADR-0009），增刪改因此得認得出動的是哪一張。
+        "holdings": [_lot(row) for row in rows],
     }
     # 同一個卡種的持有品共用同一個市值，沒有市值時整組都沒有。
     value = rows[0].get("market_value")
@@ -76,12 +74,37 @@ def _sold_cell(rows: Sequence[dict]) -> dict:
     return {
         **_identity(rows[0]),
         "sold_count": summary["sold_count"],
+        "holdings": [_lot(row) for row in rows],
         # 分批賣出時取最近一次：這一格在牆上的位置由它決定。
         "sold_date": max(row["sold_date"] for row in rows),
         "sold_cost_twd": cost,
         "realized_pnl_twd": realized,
         # 與全站同一個報酬率定義：(結果 − 成本) ÷ 成本，不使用倍數。
         "return_rate": realized / cost,
+    }
+
+
+def _lot(holding: dict) -> dict:
+    """展開區的增刪改要動哪一筆，就得認得出那一筆。
+
+    卡種列 id 與持有品 id 缺一不可：前者是「編輯時可以改掛到別的卡種」需要的，
+    後者才是這一筆本身。已售出的另外帶售出資訊——刪掉一筆已售出的會動到已實現
+    損益，確認訊息必須說得出會少多少。
+    """
+    lot = {
+        "id": holding["id"],
+        "mapping_candidate_id": holding["mapping_candidate_id"],
+        "status": holding["status"],
+        "purchase_date": holding["purchase_date"],
+        "cost_twd": holding["cost_twd"],
+    }
+    if holding["status"] != STATUS_SOLD:
+        return lot
+    return {
+        **lot,
+        "sold_date": holding["sold_date"],
+        "sold_price_twd": holding["sold_price_twd"],
+        "realized_pnl_twd": holding["realized_pnl_twd"],
     }
 
 

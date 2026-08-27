@@ -1,0 +1,191 @@
+{# 持有品的新增、售出、編輯、改回持有中與刪除。首頁與持有品頁共用——這段有一百多
+   行，各抄一份必然漂移，而漂移的那一份會安靜地少驗一個欄位。
+
+   與 _market_script.html 同一個分工：**行為共用，外觀不共用**。對話框的樣式留在
+   各頁自己的 <style> 裡，版面之後重做時兩頁不會被綁在一起改。
+
+   需要的 context：`all_kinds`（可挑的卡種）與 `today`（購入日的預設值）。 #}
+
+<!-- 卡種清單由伺服器端渲染成真的 HTML，對話框需要時複製一份。塞進 JS 陣列的話，
+     這份資料就只有 JS 看得到了。 -->
+<select id="kind-options" hidden>
+  {% for kind in all_kinds %}
+  <option value="{{ kind.id }}">{{ kind.card_name_raw }}（{{ kind.series_raw }} #{{ kind.number_raw }}）</option>
+  {% endfor %}
+</select>
+
+<dialog id="editor">
+  <h3 id="editor-title"></h3>
+  <p class="about" id="editor-about"></p>
+  <div id="editor-fields"></div>
+  <p class="willchange" id="editor-warning"></p>
+  <p class="err" id="editor-error"></p>
+  <menu>
+    <button type="button" onclick="document.getElementById('editor').close()">取消</button>
+    <button type="button" id="editor-submit" onclick="submitEditor()">確定</button>
+  </menu>
+</dialog>
+
+<script>
+  const TODAY = "{{ today }}";
+
+  // 操作入口就長在它要動的那一筆旁邊，操作對象因此不會弄錯。售出時畫面上本來就
+  // 列著該卡種所有持有中的那幾張（含購入日與成本），由人指定賣掉哪一張——系統
+  // 不自動 FIFO、不自動挑成本最高者（ADR-0009）。
+
+  const dialog = document.getElementById("editor");
+  let pending = null;
+
+  // 兩頁的 markup 不同（一邊是表格的列，一邊是卡片展開區的清單），但兩邊都把那
+  // 一筆的資料掛在最近的 data-id 上，所以這一句在兩頁都成立。
+  const lotOf = (button) => button.closest("[data-id]").dataset;
+  const str = (id) => document.getElementById(id).value.trim();
+  const num = (id) => { const v = str(id); return v === "" ? null : Number(v); };
+  const money = (value) => Number(value).toLocaleString();
+
+  const field = (label, control) => `<label>${escapeHtml(label)}${control}</label>`;
+  const dateField = (id, label, value) => field(label, `<input id="${id}" type="date" value="${value}">`);
+  const moneyField = (id, label, value) => field(label, `<input id="${id}" type="number" min="1" step="1" value="${value}">`);
+
+  function kindSelect(selected) {
+    const clone = document.getElementById("kind-options").cloneNode(true);
+    clone.id = "f-kind";
+    clone.removeAttribute("hidden");
+    for (const option of clone.options) {
+      option.toggleAttribute("selected", Number(option.value) === selected);
+    }
+    return field("卡種", clone.outerHTML);
+  }
+
+  function openEditor(config) {
+    document.getElementById("editor-title").textContent = config.title;
+    document.getElementById("editor-about").textContent = config.about || "";
+    document.getElementById("editor-fields").innerHTML = config.fields || "";
+    document.getElementById("editor-warning").textContent = config.warning || "";
+    document.getElementById("editor-error").textContent = "";
+    const submit = document.getElementById("editor-submit");
+    submit.textContent = config.submitLabel || "確定";
+    submit.disabled = false;
+    pending = config;
+    dialog.showModal();
+  }
+
+  function detailOf(body) {
+    // 驗證失敗要說出是哪個欄位、為什麼。只說一句「失敗」等於沒說。
+    const detail = body.detail;
+    if (!detail) return "";
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) return detail.map((item) => item.msg).join("；");
+    return detail.message || "";
+  }
+
+  async function submitEditor() {
+    const error = document.getElementById("editor-error");
+    const submit = document.getElementById("editor-submit");
+    error.textContent = "";
+    submit.disabled = true;
+    const request = pending.build();
+    try {
+      const response = await fetch(request.url, {
+        method: request.method,
+        headers: { "Content-Type": "application/json" },
+        body: request.body === undefined ? undefined : JSON.stringify(request.body),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        error.textContent = detailOf(body) || `失敗（${response.status}）`;
+        submit.disabled = false;
+        return;
+      }
+      // 所有衍生數字都是算出來的，重整一次畫面就全部正確。
+      location.reload();
+    } catch (failure) {
+      error.textContent = "連線中斷：" + failure;
+      submit.disabled = false;
+    }
+  }
+
+  function openCreate() {
+    openEditor({
+      title: "新增持有品",
+      about: "購入日預設今天，補登較早的購入時改掉即可。",
+      fields: kindSelect(null) + dateField("f-purchase", "購入日", TODAY) + moneyField("f-cost", "購入成本（新台幣）", ""),
+      build: () => ({
+        method: "POST",
+        url: "/api/holdings",
+        body: {
+          mapping_candidate_id: Number(str("f-kind")),
+          purchase_date: str("f-purchase"),
+          cost_twd: num("f-cost"),
+        },
+      }),
+    });
+  }
+
+  function openSale(button) {
+    const lot = lotOf(button);
+    openEditor({
+      title: "售出",
+      about: `${lot.kind}／${lot.purchase} 購入 ${money(lot.cost)}`,
+      fields: dateField("f-sold", "售出日", TODAY) + moneyField("f-price", "售出價（新台幣）", ""),
+      build: () => ({
+        method: "POST",
+        url: `/api/holdings/${lot.id}/sale`,
+        body: { sold_date: str("f-sold"), sold_price_twd: num("f-price") },
+      }),
+    });
+  }
+
+  function openEdit(button) {
+    const lot = lotOf(button);
+    const sold = lot.status === "sold";
+    openEditor({
+      title: "編輯持有品",
+      about: lot.kind,
+      fields: kindSelect(Number(lot.kindId))
+        + dateField("f-purchase", "購入日", lot.purchase)
+        + moneyField("f-cost", "購入成本（新台幣）", lot.cost)
+        + (sold ? dateField("f-sold", "售出日", lot.sold) + moneyField("f-price", "售出價（新台幣）", lot.price) : ""),
+      build: () => {
+        const body = {
+          mapping_candidate_id: Number(str("f-kind")),
+          purchase_date: str("f-purchase"),
+          cost_twd: num("f-cost"),
+        };
+        if (sold) {
+          body.sold_date = str("f-sold");
+          body.sold_price_twd = num("f-price");
+        }
+        return { method: "PATCH", url: `/api/holdings/${lot.id}`, body };
+      },
+    });
+  }
+
+  function openUnsell(button) {
+    const lot = lotOf(button);
+    openEditor({
+      title: "改回持有中",
+      about: `${lot.kind}／${lot.sold} 售出 ${money(lot.price)}`,
+      warning: `售出日與售出價會一併清空，已實現損益會減少 ${money(lot.realized)}。`,
+      build: () => ({
+        method: "PATCH",
+        url: `/api/holdings/${lot.id}`,
+        body: { sold_date: null, sold_price_twd: null },
+      }),
+    });
+  }
+
+  function openDelete(button) {
+    const lot = lotOf(button);
+    openEditor({
+      title: "刪除持有品",
+      // 確認的必須是**具體哪一筆**，不是一個抽象的「確定嗎」。
+      about: `${lot.kind}／${lot.purchase} 購入 ${money(lot.cost)}`,
+      warning: lot.status === "sold"
+        ? `刪除後已實現損益會減少 ${money(lot.realized)}。這個動作無法復原。`
+        : "這個動作無法復原。",
+      submitLabel: "確定刪除",
+      build: () => ({ method: "DELETE", url: `/api/holdings/${lot.id}` }),
+    });
+  }
+</script>
