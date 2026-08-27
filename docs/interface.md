@@ -1,7 +1,7 @@
 # 介面現況與交接
 
-這份文件寫給**接手 UIUX 階段的人**。它回答三件事：現在的介面長什麼樣、哪些東西
-**不能動**、哪些東西**已知該動但刻意還沒動**。
+這份文件寫給**接手 UIUX 階段的人**。它回答四件事：現在的介面長什麼樣、哪些東西
+**不能動**、動手改的時候**測試會擋你哪裡**、哪些東西**已知該動但刻意還沒動**。
 
 它不是設計規範，也不取代 `CONTEXT.md`。詞彙一律以 `CONTEXT.md` 為準，決策一律以
 `docs/adr/` 為準——本文若與那兩者衝突，是本文錯了。
@@ -127,9 +127,85 @@ UIUX 階段若決定要建立共用的設計 token 或樣式表，**這個分工
 
 ---
 
-## 6. 已知該動、刻意還沒動
+## 6. 重做版面時，測試會擋你哪裡
 
-### 6.1 卡圖框比例錯了，每格浪費一半空間 ⭐ 優先
+約三十條測試斷言在 HTML 字串上。**其中只有一部分是真的紅線，其餘紅了應該改測試而
+不是改設計。** 先分清楚這三層，才不會被綁住手腳。
+
+判準是專案自己的規範：**重寫實作但行為不變時，測試不該紅。** 第二、三層違反了這一
+條——它們的意圖是對的，只是借用了實作細節來表達那個意圖。
+
+### 第一層：紅線，不能違反
+
+這些斷言守的是 §5 的約束。它們紅了代表畫面開始說謊，**要改的是設計不是測試**。
+
+```python
+assert "倍" not in html                          # 報酬率不用倍數
+assert f"{value['sample_count']} 筆" in html      # 市值必並列樣本（ADR-0015）
+assert f"{sample_from}～{sample_to}" in html      # 同上，涵蓋期間
+assert "已過期 41 天" in html                     # 近 30 天無成交要說出過期天數
+assert "敬請期待" in page                         # 流動性的空狀態有明確文字
+assert "資料累積中" in page                       # 動能的空狀態有明確文字
+assert "PSA 10 張數" in page                      # 流動性的理由要說出兩個半邊
+assert "Mew" in html                              # 沒有市值的卡種仍在牆上
+assert 'name="viewport"' in page                  # 手機讀得到
+```
+
+金額與百分比的格式斷言（`{:,}`、`{:+.1%}`）也屬於這一層：它們守的是「數字要顯示、
+而且用全站同一種寫法」。
+
+### 第二層：意圖對，寫法綁死了實作
+
+```python
+assert "auto-fill" in html                    # 意圖：格子自動換行、頁面不橫捲
+assert "overflow-x" not in html               # 意圖：頁面本身永不橫向捲動
+assert "<table" not in page                   # 意圖：卡圖牆不用表格排版
+assert ".wall .soon" in page                  # 意圖：空狀態有自己的樣式
+assert 'id="wall-tab-held" checked' in html   # 意圖：持有中是預設分頁
+assert 'class="tblwrap"' in page              # 意圖：持有品頁的表格可橫捲
+assert f"{momentum['return_rate']:+.1%}" not in page   # 意圖：動能不隨頁面一起算
+```
+
+每一條的**意圖**都該保留，**寫法**都該讓路：
+
+- 改用 `flex-wrap` 或 container query 取代 `auto-fill` → `auto-fill` 那條誤紅
+- 在卡片展開區用 `<table>` 列出逐張明細（語意上其實合理）→ `<table>` 那條誤紅
+- 給某個內部元素加上合法的橫向捲動 → `overflow-x` 那條誤紅
+- 改用 JS 切分頁而非 `radio + :checked` → `checked` 那條誤紅
+- 重新命名 CSS 類別 → `.wall .soon` 那條誤紅
+
+遇到這些，**改測試讓它表達意圖而不是實作**。例如「頁面不橫捲」比較好的測法是實際
+量測渲染寬度，而不是搜尋 CSS 屬性字串——但那需要瀏覽器，目前的測試堆疊沒有。在引入
+之前，退而求其次的作法是：改寫斷言使其對應新的實作，並在測試裡把**意圖**寫進註解。
+
+### 第三層：綁死 JS 函式名與 data 屬性
+
+約十六條，集中在 `test_portfolio_actions.py` 與 `test_holdings_crud.py`：
+
+```python
+assert 'onclick="openSale(this)"' in page      # 還有 openCreate / openEdit / openUnsell / openDelete
+assert 'data-purchase="2026-03-15"' in page    # 還有 data-cost / data-kind / data-realized / data-id
+assert 'id="editor"' in page
+assert "location.reload()" in page
+assert "detailOf" in page
+```
+
+意圖是「操作入口就在那一筆旁邊」「確認訊息說得出是具體哪一筆」「操作完成畫面自動
+反映」「失敗說得出原因」——這四件事是 §5 第 11 條的紅線，**但用什麼函式名、什麼屬性
+名、用不用 `location.reload()` 完全不是**。
+
+前端一旦重寫，這一層會整批紅。**這是預期中的，不是你弄壞了東西。**
+
+### 交接時的實務建議
+
+1. 動工前先跑一次 `uv run python -m pytest -q`，把當下的紅燈記下來當基準線
+2. 每改一塊就跑一次，只看**新增**的紅燈
+3. 新增的紅燈先問「這條屬於哪一層」，再決定改設計還是改測試
+4. 若第一層紅了，停下來——那代表畫面正在說謊，不是版面問題
+
+## 7. 已知該動、刻意還沒動
+
+### 7.1 卡圖框比例錯了，每格浪費一半空間 ⭐ 優先
 
 `aspect-ratio: 10/7` 出現在五處（`portfolio.html` ×1、`holdings.html` ×2、
 `queue.html` ×2），搭配 `object-fit: contain` 與 `background: #f3f4f6`。
@@ -168,7 +244,7 @@ UIUX 階段若決定要建立共用的設計 token 或樣式表，**這個分工
 
 沒有任何測試鎖住這個值，改動不會有紅燈保護，也不會有紅燈阻擋。
 
-### 6.2 一張卡圖裁切結果異常
+### 7.2 一張卡圖裁切結果異常
 
 `data/images/744296.webp`（MEGA Lucario 錯體版）是 **668×610，比例 1.095**，
 其餘 68 張都在 0.70~0.72。就算換上最佳比例，它那一格仍會有約 35% 留白——
@@ -176,7 +252,7 @@ UIUX 階段若決定要建立共用的設計 token 或樣式表，**這個分工
 
 這是資料問題不是版面問題，但會在版面上現形，所以記在這裡。
 
-### 6.3 深色模式只做了一半
+### 7.3 深色模式只做了一半
 
 三個頁面都宣告了 `color-scheme: light dark`，所以作業系統切深色時瀏覽器會給深色底，
 **但所有顏色都是寫死的淺色系值**，沒有深色對應版本。最明顯的是 `#f3f4f6`（圖片
@@ -185,7 +261,7 @@ UIUX 階段若決定要建立共用的設計 token 或樣式表，**這個分工
 要嘛補齊深色版（`prefers-color-scheme` 或 CSS 變數），要嘛拿掉 `color-scheme` 宣告
 只做淺色。**現在是兩者之間最糟的狀態**：宣告了支援，實際上沒支援。
 
-### 6.4 三頁的樣式各寫一份
+### 7.4 三頁的樣式各寫一份
 
 如 §3 所述這是刻意的。但 `.totals`、`.freshness`、`.toolbar`、`button` 等區塊在
 `portfolio.html` 與 `holdings.html` 幾乎逐字相同。若這個階段要建立設計 token，
@@ -193,7 +269,7 @@ UIUX 階段若決定要建立共用的設計 token 或樣式表，**這個分工
 
 ---
 
-## 7. 資料從哪裡來
+## 8. 資料從哪裡來
 
 畫面上的每個數字都是伺服器算好的，前端**不重算任何金額**。
 
@@ -214,7 +290,7 @@ UIUX 階段若決定要建立共用的設計 token 或樣式表，**這個分工
 
 ---
 
-## 8. 有一張參考圖
+## 9. 有一張參考圖
 
 `docs/reference/collectr portfolio page.png` 是 Collectr 的收藏頁截圖，當初拿來當
 版面參考。它不是規範，只是一個「別人怎麼做」的樣本。
