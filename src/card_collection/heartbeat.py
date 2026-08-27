@@ -9,9 +9,16 @@ switch）判斷的是「該來的心跳沒來」，所以它是唯一抓得到�
 一律不送。訊息由具名欄位逐個組出來，絕不整包 dump 任何字典，因為 dump 會在日後
 有人往那個字典加欄位時，安靜地把新欄位一起送出去。
 
-**設定來自環境變數** `CARD_COLLECTION_HEALTHCHECK_URL`：ping URL 等同密碼，知道
-的人可以偽造心跳讓你以為一切正常，所以它**絕不 commit 進 repo**。未設定就是
-no-op——本機開發與測試不受影響，也不會誤送。
+**ping URL 等同密碼**，知道的人可以偽造心跳讓你以為一切正常，所以它**絕不 commit
+進 repo**——正式執行時由 `Heartbeat.from_env()` 從環境變數
+`CARD_COLLECTION_HEALTHCHECK_URL` 讀進來。空字串與未設定一視同仁（都當沒設定），
+這條規則屬於「心跳」這個概念，所以留在本模組。
+
+**「要不要去讀那個環境變數」則是組裝層的事**：`Heartbeat(url=...)` 只認明確的
+網址，`url=None` 的唯一意思就是「明確關閉、完全不要送」。呼叫端因此有辦法表達
+「這台機器沒設定心跳」——否則傳 `None` 會拿回開發者的真實設定，測試結果就取決於
+跑測試的人的環境變數（issue #18）。未設定就是 no-op——本機開發與測試不受影響，
+也不會誤送。
 """
 
 import os
@@ -39,9 +46,18 @@ class Heartbeat:
         send: Send = http_send,
         log: Callable[[str], None] = print,
     ) -> None:
-        self._url = url if url is not None else os.environ.get(ENV_URL) or None
+        self._url = url
         self._send = send
         self._log = log
+
+    @classmethod
+    def from_env(cls) -> "Heartbeat":
+        """正式執行的入口：從環境變數讀出 ping 網址來組一個心跳。
+
+        `or None` 不能拿掉——環境變數存在但是空字串，代表的是「沒設定」而不是
+        「網址就是空字串」。這個判斷屬於心跳自己，不外流給組裝層。
+        """
+        return cls(url=os.environ.get(ENV_URL) or None)
 
     @property
     def is_configured(self) -> bool:

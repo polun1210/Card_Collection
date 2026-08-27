@@ -77,7 +77,7 @@ def build_services(
     cards = MappingCandidateRepository(connection)
     sales = SaleRepository(connection)
     runs = CrawlRunRepository(connection)
-    beat = heartbeat or Heartbeat()
+    beat = heartbeat or Heartbeat.from_env()
     return Services(
         connection=connection,
         cards=cards,

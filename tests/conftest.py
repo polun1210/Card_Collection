@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from card_collection.app import create_app
 from card_collection.fx import BOT_L6M_JPY_URL, FxRateError
-from card_collection.heartbeat import Heartbeat
+from card_collection.heartbeat import ENV_URL, Heartbeat
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NOTION_CSV = REPO_ROOT / "data" / "notion-export" / "pokemon_project.csv"
@@ -242,6 +242,17 @@ class RecordedHeartbeat:
         if self.fails:
             raise RuntimeError("心跳送不出去")
         self.sent.append((url, body))
+
+
+@pytest.fixture(autouse=True)
+def _clear_heartbeat_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """跑測試的機器上可能設了真的心跳網址（等同密碼）。測試絕不該讀到它。
+
+    讀得到的話，「未設定心跳」這個情境就測不出來——傳 `None` 卻拿回開發者的真實
+    設定，測試結果因此取決於跑測試的人（issue #18）。這只是保險：真正的修法是
+    `Heartbeat` 不再自己讀環境變數，改由 `Heartbeat.from_env()` 負責。
+    """
+    monkeypatch.delenv(ENV_URL, raising=False)
 
 
 @pytest.fixture
