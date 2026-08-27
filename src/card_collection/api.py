@@ -19,6 +19,7 @@ from .holdings import (
     with_market_values,
 )
 from .images import IMAGE_MEDIA_TYPE, CardImageError
+from .indicators import liquidity
 from .mapping import DEFAULT_BATCH_SIZE, MappingService
 from .market import MarketService
 from .portfolio import overview
@@ -287,6 +288,10 @@ def read_card_holdings(card: CardRow, holdings: Holdings, market: Market) -> dic
         "holdings": list(rows),
         "summary": summarize(rows),
         "market_value": market.value_for(apparel_id),
+        # 動能與流動性掛在這裡而不是自己開一個端點：展開卡片時本來就要打這一支，
+        # 多一個接縫等於多一次往返，也多一個之後要一起改的地方。
+        "momentum": market.momentum_for(apparel_id),
+        "liquidity": liquidity(),
     }
 
 
@@ -476,14 +481,24 @@ def read_portfolio_page(
     market: Market,
     runs: CrawlRuns,
     clock: Clock,
+    repository: Repository,
 ) -> HTMLResponse:
     """打開就看到自己的收藏，不是後台工具——待審佇列因此在 /queue。"""
     portfolio = read_portfolio(holdings, market, runs, clock)
     return request.app.state.templates.TemplateResponse(
         request,
         "portfolio.html",
-        # 跨度不足一年時，YTD 會是一個與 ALL 完全一樣的區間，不給它按鈕。
-        {**portfolio, "show_ytd": spans_a_year(portfolio["trend"])},
+        {
+            **portfolio,
+            # 跨度不足一年時，YTD 會是一個與 ALL 完全一樣的區間，不給它按鈕。
+            "show_ytd": spans_a_year(portfolio["trend"]),
+            # 流動性對每一個卡種都一樣，由伺服器渲染即可——它不必等腳本跑完，
+            # 理由也就只有 indicators.py 一個地方說了算。
+            "liquidity": liquidity(),
+            # 新增持有品要從全部卡種裡挑一個，不只是已經有持有品的那些。
+            "all_kinds": repository.list_kinds(),
+            "today": clock().date().isoformat(),
+        },
     )
 
 

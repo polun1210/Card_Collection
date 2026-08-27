@@ -18,6 +18,7 @@ from datetime import date, datetime
 from .crawl_runs import TRIGGER_MANUAL, CrawlOutcome, CrawlRunRepository
 from .fx import FxRateService, to_twd
 from .heartbeat import Heartbeat
+from .indicators import momentum
 from .repository import MappingCandidateRepository
 from .sales import (
     JST,
@@ -193,6 +194,14 @@ class MarketService:
 
     def value_for(self, apparel_id: int) -> dict | None:
         return market_value(self._sales.active_for_apparel(apparel_id), self.today())
+
+    def momentum_for(self, apparel_id: int) -> dict:
+        """動能與市值吃同一份原料：參與計算的成交紀錄，待審的一律不算。
+
+        算不出來時回的是**帶理由的空狀態**而不是 None——呼叫端不必自己編一句話來
+        解釋為什麼沒有數字，那句話會在每個呼叫端各長一個版本。
+        """
+        return momentum(self._sales.active_for_apparel(apparel_id), self.today())
 
     def active_sales(self) -> dict[int, list[dict]]:
         """參與計算的成交紀錄，依卡種分組、日期升冪。
