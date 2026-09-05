@@ -1,0 +1,54 @@
+{# 全站外殼：頁首 + toast 容器。三頁共用（spec §6 / §2.1 / §11.1）。
+
+   需要的 context：`active_page` —— "portfolio" / "holdings" / "queue"，
+   用來標作用中的導覽與決定主 CTA 的形式。
+
+   收藏總覽與持有品：更新行情連結走 crawlMarket()（來自 _market_script.html），
+   ＋ 新增持有品走 openCreate()（來自 _holding_editor.html）。
+   卡種對應：這兩支片段都沒引入，且該頁不呈現金額——所以不放更新行情連結，
+   ＋ 新增持有品改用連到 /holdings 的連結。 #}
+<header class="app-header">
+  <div class="app-header__inner">
+    <span class="app-header__brand">Pokémon Collection</span>
+    <nav class="app-header__nav">
+      <a href="/"{% if active_page == "portfolio" %} aria-current="page"{% endif %}>收藏總覽</a>
+      <a href="/holdings"{% if active_page == "holdings" %} aria-current="page"{% endif %}>持有品</a>
+      <a href="/queue"{% if active_page == "queue" %} aria-current="page"{% endif %}>卡種對應</a>
+    </nav>
+    <div class="app-header__actions">
+      {% if active_page != "queue" %}
+      {# 決定 ④：行情健康時仍找得到的手動更新入口。低調的小文字連結，不加框不加底。 #}
+      <button type="button" class="app-header__update" onclick="crawlMarket(this)">更新行情</button>
+      {% endif %}
+      {% if active_page == "queue" %}
+      <a class="btn btn-primary app-header__cta" href="/holdings">＋ 新增持有品</a>
+      {% else %}
+      <button type="button" class="btn btn-primary app-header__cta" onclick="openCreate()">＋ 新增持有品</button>
+      {% endif %}
+      <details class="nav-menu">
+        <summary>選單</summary>
+        <div class="nav-menu__panel">
+          <a href="/">收藏總覽</a>
+          <a href="/holdings">持有品</a>
+          <a href="/queue">卡種對應</a>
+          <a href="/holdings">新增持有品</a>
+        </div>
+      </details>
+    </div>
+  </div>
+</header>
+
+<div class="toast-tray" id="toast-tray"></div>
+<script>
+  // 簡短的成功回饋（spec §10.10）。#35 的「確認對應」「不納入行情」「推翻對應」
+  // 等動作呼叫；現在還沒有人用，先放著讓明天的工單直接接。
+  function showToast(message, options) {
+    const tray = document.getElementById("toast-tray");
+    if (!tray) return;
+    const toast = document.createElement("div");
+    toast.className = "toast" + (options && options.error ? " is-error" : "");
+    toast.textContent = message;
+    tray.appendChild(toast);
+    setTimeout(() => toast.remove(), (options && options.duration) || 4000);
+  }
+</script>
