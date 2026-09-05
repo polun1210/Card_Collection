@@ -537,6 +537,44 @@ input.is-error {
 }
 
 /* ============================================================================
+   共用表格基礎（持有品帳本 + 卡種對應歷史）
+   兩頁的 .tblwrap 與表格骨架逐字相同（ADR-0023 Context 第 2 條、interface.md
+   §7.4）。各頁只保留自己不同的：table 的 min-width、td.num 靠右與否、td.norm。
+   ========================================================================== */
+.tblwrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+th,
+td {
+  padding: 0.55rem 0.9rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default);
+  vertical-align: top;
+}
+thead th {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+/* 數字欄一律等寬、不換行（interface.md §4 全站慣例）。靠右與否各頁自訂。 */
+td.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ============================================================================
    對話框 / 抽屜基礎（spec §8 / §13）
    ⚠ 抽屜的實際互動（桌機右側浮出、手機全螢幕）由 #33 實作；這裡只給表面、
    邊框、圓角、陰影的基礎，讓 #33 直接接。

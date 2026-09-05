@@ -16,13 +16,10 @@
 .toolbar h2 { font-size: 18px; margin: 0; }
 .toolbar a { font-size: 13px; }
 
-/* --- 依卡種的帳本表格。工作台允許受控的橫向捲動（spec §11.5）。 --- */
-.tblwrap { overflow-x: auto; border: 1px solid var(--border-default); border-radius: var(--radius-control); }
-table { border-collapse: collapse; width: 100%; min-width: 62rem; font-size: 14px; }
-th, td { padding: .55rem .9rem; text-align: left; border-bottom: 1px solid var(--border-default); vertical-align: top; }
-thead th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
-tbody tr:last-child td { border-bottom: none; }
-td.num { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+/* --- 依卡種的帳本表格。骨架在 design.css；這裡只留本頁不同的部分。
+       工作台允許受控的橫向捲動（spec §11.5）。 --- */
+table { min-width: 62rem; }
+td.num { text-align: right; }
 th.num { text-align: right; }
 .thumb { width: 3.6rem; aspect-ratio: 10/7; object-fit: contain; background: var(--bg-surface); border-radius: var(--radius-tag); }
 .noimg { display: inline-block; width: 3.6rem; aspect-ratio: 10/7; background: var(--bg-surface); border-radius: var(--radius-tag); }
