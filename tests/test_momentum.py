@@ -289,16 +289,17 @@ def test_動能的空狀態在畫面上叫資料累積中(client, confirm_card, 
     assert "資料累積中" in page
 
 
-def test_兩個空狀態有自己的樣式而不是留一塊空白(client, confirm_card, crawl):
-    # Arrange
-    confirm_card(client, PRINTING_ERROR)
-    crawl(client)
-
+def test_兩個空狀態有自己的樣式而不是留一塊空白(client):
     # Act
-    page = _page(client)
+    css = client.get("/static/portfolio.css")
 
-    # Assert：它們要長得像刻意的設計、不像壞掉的畫面，所以有自己的一組樣式
-    assert ".wall .soon" in page
+    # Assert：意圖是「動能與流動性的空狀態有自己的一組樣式，看起來像刻意留的位子、
+    # 不像一塊沒渲染出來的空白」。ADR-0023 之後樣式從 inline <style> 移進了
+    # static/portfolio.css，改成對樣式表驗證 .wall .soon 這條規則還在；走同一個
+    # TestClient 接縫，順帶確認 /static 掛載沒壞。空狀態的 markup 由
+    # test_動能的空狀態在畫面上叫資料累積中 守。
+    assert css.status_code == 200
+    assert ".wall .soon" in css.text
 
 
 def test_動能展開時才取而不隨頁面一起算(client, confirm_card, crawl):

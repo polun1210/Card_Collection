@@ -1,0 +1,9 @@
+/* 全站共用的 Design Foundation（ADR-0023）。
+ *
+ * 這一版**刻意留空**：預先拆檔（prefactor）只把三頁的 inline 樣式原封不動搬成
+ * 靜態資源，不抽共用 token、不改任何顏色值／間距／比例。實際的共用內容
+ * （深色 token、typography、button、input、tabs、global header、dialog／drawer
+ * 基礎）由後續工單 #30 填入。
+ *
+ * 三頁的 <link> 已經指到這裡，所以之後填內容不必再動樣板。
+ */

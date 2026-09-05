@@ -336,8 +336,16 @@ def test_卡圖牆不靠橫向捲動排版(client, confirm_card, crawl):
 
     # Act
     html = client.get("/").text
+    css = client.get("/static/portfolio.css")
 
-    # Assert：手機是這個工具最常見的唯讀場景，頁面本身永不橫向捲動
+    # Assert
+    # 意圖一：卡圖牆不用表格排版——這一條仍鎖在 markup 上。
     assert "<table" not in html
-    assert "overflow-x" not in html
-    assert "auto-fill" in html
+    # ADR-0023 之後，版面樣式從 inline <style> 移進了 static/portfolio.css。以下兩條
+    # 的意圖沒變，只是改成對樣式表驗證，並且走同一個 TestClient 接縫——順帶確認
+    # /static 掛載沒壞（掛錯的話三頁會裸奔，<link> 回 404）。
+    assert css.status_code == 200
+    # 意圖二：格子自動換行、頁面不橫捲——欄數用 auto-fill 隨寬度自己長，不靠捲動。
+    assert "repeat(auto-fill" in css.text
+    # 意圖三：頁面本身永不橫向捲動——收藏總覽這一頁不出現任何 overflow-x。
+    assert "overflow-x" not in css.text
