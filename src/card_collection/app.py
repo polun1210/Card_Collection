@@ -13,6 +13,7 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .api import router
@@ -24,6 +25,9 @@ from .services import build_services
 from .snkrdunk import DEFAULT_REQUEST_INTERVAL_SECONDS, SnkrdunkError
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+# 三頁的樣式從樣板的 inline <style> 移出後住在這裡（ADR-0023）。掛的是本機檔案，
+# 不引入任何外部資源，不違反「零外部資源」的原則。
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 def create_app(
@@ -66,6 +70,7 @@ def create_app(
 
     app = FastAPI(title="Card Collection", lifespan=lifespan)
     app.state.templates = Jinja2Templates(directory=TEMPLATES_DIR)
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(router)
 
     @app.exception_handler(CardImageError)
