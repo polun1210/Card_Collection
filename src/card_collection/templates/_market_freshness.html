@@ -1,25 +1,40 @@
-{# 行情有多新，必須與市值本身出現在同一個畫面上。首頁與持有品頁共用同一份——兩處各寫一份的話，改了一邊另一邊就會安靜地說舊話。 #}
-  <div class="freshness{{ ' stale' if freshness.is_stale else '' }}">
+{# 行情新鮮度警示。收藏總覽與持有品頁共用（兩處各寫一份會安靜地說舊話）。
+
+   **只在異常時顯示**（uiux-spec §7.2 ＋ 使用者裁決）。健康時整塊不渲染。
+
+   docs/interface.md §5 第 6 條說「行情新鮮度必須與市值出現在同一個畫面上」，
+   uiux-spec §7.2 說健康時不顯示——兩份文件正面衝突。裁決：照 uiux-spec §7.2。
+   那條約束自己寫的擔憂是「停擺的爬取若不出聲，三週前的數字看起來與今天一樣」，
+   它防的是**過期時被誤導**；新設計過期會大聲警示（下面 .stale 那塊），意圖完全
+   保住。失去的只是「健康時看得到確切幾小時前」，那不是誠實性問題。
+
+   顯示條件：從未成功 / 已過期 / 這一輪有狀況（進行中、失敗、匯率沒抓到、
+   個別卡種抓失敗）。 #}
+{% set run = freshness.latest %}
+{% set run_problem = run and (run.status in ("running", "failed") or run.fx_error or run.failures) %}
+{% if freshness.never_succeeded or freshness.is_stale or run_problem %}
+  <div class="freshness{{ ' stale' if freshness.is_stale or freshness.never_succeeded else '' }}">
     {% if freshness.never_succeeded %}
       <strong>從未成功更新過行情。</strong>
       畫面上若有市值，全部來自更早以前的資料；沒有市值的卡種不會被填上任何編出來的數字。
-    {% else %}
-      上次更新行情：<strong>{{ freshness.age_label }}前</strong>（{{ freshness.last_success.finished_at[:16].replace('T', ' ') }}）
-      {%- if freshness.is_stale %}
-        —— <strong>已超過 24 小時沒有成功更新</strong>。排程可能沒跑、電腦關機，或來源出了問題。
-      {%- endif %}
+      <button type="button" class="freshness__act" onclick="crawlMarket(this)">立即更新行情</button>
+    {% elif freshness.is_stale %}
+      <strong>行情已超過 24 小時沒有成功更新。</strong>
+      上次成功：{{ freshness.last_success.finished_at[:16].replace('T', ' ') }}（{{ freshness.age_label }}前）。排程可能沒跑、電腦關機，或來源出了問題。
+      <button type="button" class="freshness__act" onclick="crawlMarket(this)">立即更新行情</button>
     {% endif %}
-    {% if freshness.latest and freshness.latest.status == 'running' %}
+    {% if run and run.status == 'running' %}
       <span class="running">目前有一輪正在進行中。</span>
-    {% elif freshness.latest and freshness.latest.status == 'failed' %}
-      <span class="failed">上一輪失敗：{{ freshness.latest.error }}</span>
+    {% elif run and run.status == 'failed' %}
+      <span class="failed">上一輪失敗：{{ run.error }}</span>
     {% endif %}
-    {% if freshness.latest and freshness.latest.fx_error %}
-      <span class="failed">上一輪的匯率沒抓到：{{ freshness.latest.fx_error }}（成交已用日圓原幣入庫，一筆都沒丟）</span>
+    {% if run and run.fx_error %}
+      <span class="failed">上一輪的匯率沒抓到：{{ run.fx_error }}（成交已用日圓原幣入庫，一筆都沒丟）</span>
     {% endif %}
-    {% if freshness.latest and freshness.latest.failures %}
-      <span class="failed">上一輪有 {{ freshness.latest.failures|length }} 個卡種抓失敗：
-        {% for failure in freshness.latest.failures %}{{ failure.card_name_raw }}（{{ failure.series_raw }} #{{ failure.number_raw }}）：{{ failure.reason }}{{ "；" if not loop.last }}{% endfor %}
+    {% if run and run.failures %}
+      <span class="failed">上一輪有 {{ run.failures|length }} 個卡種抓失敗：
+        {% for failure in run.failures %}{{ failure.card_name_raw }}（{{ failure.series_raw }} #{{ failure.number_raw }}）：{{ failure.reason }}{{ "；" if not loop.last }}{% endfor %}
       </span>
     {% endif %}
   </div>
+{% endif %}
