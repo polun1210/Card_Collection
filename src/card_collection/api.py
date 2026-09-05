@@ -490,6 +490,7 @@ def read_portfolio_page(
         "portfolio.html",
         {
             **portfolio,
+            "active_page": "portfolio",
             # 跨度不足一年時，YTD 會是一個與 ALL 完全一樣的區間，不給它按鈕。
             "show_ytd": spans_a_year(portfolio["trend"]),
             # 流動性對每一個卡種都一樣，由伺服器渲染即可——它不必等腳本跑完，
@@ -517,6 +518,7 @@ def read_holdings_page(
         request,
         "holdings.html",
         {
+            "active_page": "holdings",
             "kinds": _group_by_kind(rows, values),
             # 新增持有品要從全部卡種裡挑一個，不只是已經有持有品的那些。
             "all_kinds": repository.list_kinds(),
@@ -565,6 +567,7 @@ def read_queue_page(
         request,
         "queue.html",
         {
+            "active_page": "queue",
             "rows": repository.list_pending(limit=limit),
             "cards": repository.list_cards(),
             "progress": repository.progress(),

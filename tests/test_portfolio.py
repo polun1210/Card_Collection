@@ -50,9 +50,12 @@ def test_根路徑是收藏總覽而不是待審佇列(client):
     # Act
     html = client.get("/").text
 
-    # Assert
-    assert "收藏總覽" in html
-    assert "卡種對應" not in html
+    # Assert：意圖是「根路徑給的是收藏儀表板，不是後台的待審佇列」
+    # （docs/interface.md §2）。原本用「卡種對應」當代理字串，但 ADR-0023 的
+    # 全站頁首讓它出現在每一頁，不再能代表待審佇列，改用佇列工作區的專屬標記。
+    assert "SNKRDUNK 候選" not in html
+    # 成對驗證：確認這個標記在待審佇列頁確實存在，否則上面那條會空洞地為真
+    assert "SNKRDUNK 候選" in client.get("/queue").text
 
 
 def test_待審佇列搬到queue後功能不變(client, confirm_card):
@@ -215,7 +218,7 @@ def test_從未成功爬取時首頁顯示警示(client):
     assert "從未成功更新過行情" in html
 
 
-def test_剛爬完首頁顯示上次更新多久以前(client, confirm_card, crawl):
+def test_剛爬完首頁不出現行情警示(client, confirm_card, crawl):
     # Arrange
     confirm_card(client, LUCARIO)
     crawl(client)
@@ -223,10 +226,13 @@ def test_剛爬完首頁顯示上次更新多久以前(client, confirm_card, cra
     # Act
     html = client.get("/").text
 
-    # Assert
-    assert "上次更新行情" in html
+    # Assert：行情健康時不顯示新鮮度橫幅（uiux-spec §7.2）。interface.md §5 第 6 條
+    # 「新鮮度必須與市值同畫面」防的是「過期時被誤導」——新設計過期會大聲警示
+    # （見 test_超過24小時首頁顯示過期警示），意圖保住；健康時隱藏只是少了
+    # 「幾小時前」的資訊，不是誠實性問題。
     assert "從未成功更新過行情" not in html
     assert "已超過 24 小時沒有成功更新" not in html
+    assert 'class="freshness' not in html
 
 
 def test_超過24小時首頁顯示過期警示(client_factory, confirm_card, crawl):

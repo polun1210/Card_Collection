@@ -219,14 +219,16 @@ def test_從未成功時畫面顯示警示(client):
     assert "從未成功更新過行情" in page
 
 
-def test_剛爬完畫面顯示上次更新多久以前(client, confirm_card, crawl):
+def test_剛爬完畫面不出現行情警示(client, confirm_card, crawl):
+    # 健康時不顯示新鮮度橫幅（uiux-spec §7.2）。過期／失敗仍會大聲警示，見
+    # test_超過24小時畫面顯示過期警示 與 test_上一輪的卡種失敗直接顯示在畫面上。
     confirm_card(client, LUCARIO)
     crawl(client)
 
     page = client.get("/holdings").text
-    assert "上次更新行情" in page
     assert "從未成功更新過行情" not in page
     assert "已超過 24 小時沒有成功更新" not in page
+    assert 'class="freshness' not in page
 
 
 def test_超過24小時畫面顯示過期警示(client_factory, confirm_card, crawl):
