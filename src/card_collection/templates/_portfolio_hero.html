@@ -1,15 +1,69 @@
-{# 收藏總覽的 Hero：走勢圖與它的繪製腳本。預先拆檔（prefactor）先把這一區與
-   卡圖牆拆開，讓後續兩張工單（#30 全站外殼、Hero 改版）能各改各的而不打架。
-   這一版只搬不改——markup、腳本、樣式類別全部逐字保留。
+{# 收藏總覽的 Hero（#31）：資產走勢與持有摘要合成一整片（spec §7.3）。
 
-   需要的 context：`trend`、`show_ytd`。腳本用 `trend|tojson` 一次帶齊所有區間的點，
-   切區間在瀏覽器端切片，不打 API。 #}
+   桌機約 7:3：左邊資產走勢（區間鈕、總市值曲線、總成本階梯線、涵蓋率量尺、
+   hover 讀數），右邊只講**持有中**的部位。已實現損益與已售出張數不出現在這裡。
+   手機上摘要排在走勢圖之前（spec §11.2）——所以 DOM 先摘要、後走勢，桌機再用
+   CSS 的 row-reverse 把摘要挪到右側。
 
-  <section class="trend">
+   需要的 context：
+   - `summary`：持有品摘要（held_market_value_twd / unrealized_pnl_twd /
+     held_cost_twd / held_count / valued_count / unvalued_count），有市值時另帶
+     `unrealized_return_rate`。
+   - `trend`：走勢圖的資料點，一次帶齊所有區間（ALL 是其他四個的超集合），切區間
+     在瀏覽器端切片、不打 API。`trend[-1].held_kind_count` 是今天的持有卡種數。
+   - `show_ytd`：跨度足一年才給 YTD 按鈕。 #}
+
+<section class="hero">
+
+  <aside class="hero__summary">
+    {% if summary.valued_count %}
+    <p class="hero__mv">
+      <span class="metric-label">持有中總市值</span>
+      <span class="hero-value"><span class="unit">NT$</span>{{ "{:,}".format(summary.held_market_value_twd) }}</span>
+    </p>
+    <div class="hero__pnl">
+      <div>
+        <span class="amount {{ 'dir-up' if summary.unrealized_pnl_twd > 0 else 'dir-down' if summary.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(summary.unrealized_pnl_twd) }}</span>
+        <span class="metric-label">未實現損益</span>
+      </div>
+      <div>
+        <span class="amount {{ 'dir-up' if summary.unrealized_return_rate > 0 else 'dir-down' if summary.unrealized_return_rate < 0 else '' }}">{{ "{:+.1%}".format(summary.unrealized_return_rate) }}</span>
+        <span class="metric-label">報酬率</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <p class="hero__cost">
+      <span class="metric-label">持有中總成本</span>
+      <span class="figure">{{ "{:,}".format(summary.held_cost_twd) }}</span>
+    </p>
+
+    {# 卡種數沒有專屬的後端欄位，借走勢圖最後一天的 held_kind_count。這對數字的
+       一致性是**建構保證不是測試保證**：trend[-1] 與 summary 都由同一份持有品清單
+       推導，但 `test_曲線最後一天與持有品摘要對得起來` 只驗 cost/market_value，
+       沒有卡種數可對（summary 裡沒有）。邊界：summary.held_count 數的是
+       status == 'held'，走勢圖那天數的是 purchase_date <= today——購入日填未來日期
+       的持有品會進前者不進後者，那時「N 張 · M 卡種」會內部不一致（機率低，但
+       CRUD 允許填未來日期）。trend 為空時整段省略，不寫「0 卡種」（同 §7.7 破折號
+       的道理：89 張卻寫 0 卡種是說謊）。 #}
+    <p class="hero__count">
+      {{ summary.held_count }} 張{% if trend %} · {{ trend[-1].held_kind_count }} 卡種{% endif %}
+    </p>
+
+    {% if summary.unvalued_count %}
+    {# 總市值只涵蓋算得出價的那幾張，說清楚才不會被讀成已經涵蓋全部（ADR-0015／0021）。 #}
+    <p class="hero__coverage-note">
+      持有中還有 {{ summary.unvalued_count }} 張沒有市值（尚未對應到 SNKRDUNK，或還沒抓到成交紀錄），
+      未列入總市值、未實現損益與報酬率。
+    </p>
+    {% endif %}
+  </aside>
+
+  <div class="hero__trend">
     <div class="trend-head">
-      <h2>走勢圖</h2>
+      <h2>資產走勢</h2>
       {% if trend %}
-      <div class="ranges" id="trend-ranges">
+      <div class="range" id="trend-ranges">
         {# 沒有 1D：每日爬取的系統給不出日內走勢，提供這個區間只會製造錯誤期待。 #}
         <button type="button" data-range="7">7D</button>
         <button type="button" data-range="30">1M</button>
@@ -28,7 +82,7 @@
       <span><em>總成本</em><b id="trend-cost">{{ "{:,}".format(trend[-1].cost_twd) }}</b></span>
       <span><em>涵蓋率</em><b id="trend-coverage">{{ trend[-1].valued_kind_count }} / {{ trend[-1].held_kind_count }}</b></span>
     </p>
-    <svg id="trend-chart" role="img" aria-label="總市值曲線與總成本階梯線">
+    <svg id="trend-chart" role="img" aria-label="總市值曲線與總成本階梯線，橫軸下方附涵蓋率量尺">
       <defs>
         <pattern id="trend-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
           <line x1="0" y1="0" x2="0" y2="7"/>
@@ -36,17 +90,20 @@
       </defs>
       <g id="trend-layer"></g>
     </svg>
-    <p class="hint">
-      上面那條是<strong>總市值</strong>，下面的階梯線是<strong>總成本</strong>——兩線之間的距離就是未實現損益，階梯的每一階是一次購入。
-      灰色斜線區與虛線標出<strong>涵蓋率不足</strong>的區段：那幾天有持有卡種算不出市值，總市值只涵蓋算得出的那些，
-      愈往回推涵蓋率愈低（本地成交紀錄從第一輪爬取才開始累積）。把游標移到曲線上可以看到任何一天的數字。
-    </p>
+    {# 圖表用標籤自我說明，不再放教學段落（spec §7.3）。 #}
+    <ul class="trend-legend">
+      <li>實線 ── 總市值</li>
+      <li>階梯線 ── 總成本</li>
+      <li>虛線與斜線區 ── 當天有持有卡種算不出市值</li>
+    </ul>
     {% else %}
     <div class="trend-empty">
-      還沒有成交紀錄可以估價，畫不出曲線。按上面的「更新行情」抓一輪回來就畫得出來了。
+      還沒有成交紀錄可以估價，畫不出曲線。按頁首的「更新行情」抓一輪回來就畫得出來了。
     </div>
     {% endif %}
-  </section>
+  </div>
+
+</section>
 
 {% if trend %}
 <script>

@@ -36,6 +36,13 @@ def _portfolio(client) -> dict:
     return response.json()
 
 
+def _hero(html: str) -> str:
+    """截出 Hero 那一片。走勢與持有摘要在同一個 <section class="hero"> 裡（#31），
+    卡圖牆的「已售出」分頁、卡片明細裡的「未實現損益」都在這片之外，不該混進來。"""
+    start = html.index('<section class="hero">')
+    return html[start : html.index("</section>", start)]
+
+
 def _crawled(client, confirm_card, crawl):
     """把有錄到成交紀錄的卡種全部確認並跑一輪行情。"""
     for card in (LUCARIO, PRINTING_ERROR, OLD_TRADES, BEFORE_FX_RANGE, PIKACHU_25TH):
@@ -168,32 +175,99 @@ def test_沒有市值時不長出報酬率(client):
     assert "unrealized_return_rate" not in summary
 
 
-# --- 首頁畫面 -----------------------------------------------------------
+# --- 首頁畫面（Hero，#31）--------------------------------------------------
 
 
-def test_首頁顯示未實現損益與已實現損益(client, confirm_card, crawl):
+def test_Hero是一整片版面而不是兩張卡片(client, confirm_card, crawl):
     # Arrange
     _crawled(client, confirm_card, crawl)
 
     # Act
     html = client.get("/").text
 
-    # Assert
-    assert "未實現損益" in html
-    assert "已實現損益" in html
-    assert f"{UNREALIZED_PNL:+,}" in html
-    assert f"{REALIZED_PNL_TWD:,}" in html
+    # Assert：資產走勢與持有摘要在同一個 <section class="hero"> 裡（spec §7.3）
+    assert '<section class="hero">' in html
+    hero = _hero(html)
+    assert "資產走勢" in hero
+    assert "持有中總市值" in hero
 
 
-def test_首頁顯示報酬率(client, confirm_card, crawl):
+def test_持有中總市值是Hero裡最大的金額(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    hero = _hero(client.get("/").text)
+
+    # Assert：最大的字級（.hero-value）只出現一次，且落在持有中總市值上（spec §7.3）
+    assert hero.count("hero-value") == 1
+    label_at = hero.index("持有中總市值")
+    value_at = hero.index("hero-value")
+    assert value_at - label_at < 120, "hero-value 緊接在『持有中總市值』標籤之後"
+    assert f"{HELD_MARKET_VALUE:,}" in hero
+
+
+def test_Hero不出現已實現損益與已售出張數(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    hero = _hero(client.get("/").text)
+
+    # Assert：已實現損益是已售出的事，不進 Hero；已售出張數同理（spec §7.3）
+    assert "已實現損益" not in hero
+    assert "已售出" not in hero
+    assert f"{REALIZED_PNL_TWD:,}" not in hero
+
+
+def test_Hero顯示未實現損益與報酬率(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    hero = _hero(client.get("/").text)
+
+    # Assert：未實現損益與報酬率講的是「持有中的部位現在賺賠多少」，留在 Hero
+    assert "未實現損益" in hero
+    assert "報酬率" in hero
+    assert f"{UNREALIZED_PNL:+,}" in hero
+
+
+def test_走勢圖下方沒有教學段落(client, confirm_card, crawl):
     # Arrange
     _crawled(client, confirm_card, crawl)
 
     # Act
     html = client.get("/").text
 
-    # Assert
-    assert "報酬率" in html
+    # Assert：改版改用圖上標籤自我說明，移除圖下方那段解釋兩條線與涵蓋率的教學文字
+    assert "把游標移到曲線上" not in html
+    assert '<p class="hint">' not in html
+
+
+def test_摘要在DOM裡排在走勢圖之前(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    hero = _hero(client.get("/").text)
+
+    # Assert：手機直向堆疊時最重要的數字不必先捲過一張圖（spec §11.2）。桌機靠
+    # CSS row-reverse 把摘要視覺上移到右側——所以 DOM 順序是這個行為的唯一依據，
+    # 換掉 row-reverse 又不調 DOM 的話手機會悄悄壞掉。
+    assert hero.index("持有中總市值") < hero.index("資產走勢")
+
+
+def test_還沒有走勢資料時不謊報卡種數(client):
+    # Act：還沒爬過任何成交紀錄，trend 是空的，卡種數沒有來源
+    hero = _hero(client.get("/").text)
+
+    # Assert：先證明我們真的站在「有持有品、走勢是空的」這個狀態上，否則下面
+    # 那句 not in 會在 Hero 整塊沒渲染時空洞地為真（同 #trend-chart 那條的失效模式）
+    assert "張" in hero
+    # 省略卡種數是誠實的，寫「0 卡種」不是——持有 89 張卻寫 0 卡種會被讀成
+    # 「我一個卡種都沒有」（同 §7.7 用破折號而不是 0.0% 的道理）
+    assert "0 卡種" not in hero
 
 
 def test_首頁顯示還有幾張缺市值(client, confirm_card, crawl):

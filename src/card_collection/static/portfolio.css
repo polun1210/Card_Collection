@@ -1,29 +1,35 @@
 /* 收藏總覽（/）的版面與專屬元件。共用的設計語言（色票、字體、間距、按鈕、
-   輸入、對話框、頁首、狀態、行情新鮮度、#crawl-report）在 design.css。
+   輸入、對話框、頁首、狀態、行情新鮮度、#crawl-report、走勢圖區間鈕 .range、
+   Hero 金額排版 .hero-value / .metric-label）在 design.css。
    顏色一律引用 design.css 的 token，不寫死。
 
-   ⚠ Hero、走勢圖、總覽數字的版面重做是 #31；卡圖牆與卡圖比例是 #32。這一版
-   （#30）只把顏色搬到深色 token，版面與比例維持原狀。 */
+   ⚠ 卡圖牆與卡圖比例是 #32；那一段（本檔「--- 卡圖牆」註解之後）不歸這裡。 */
 
-/* --- 總覽數字（#31 會併入 Hero，暫留這裡） --- */
-.totals { display: flex; flex-wrap: wrap; gap: var(--space-8); margin: var(--space-3) 0 var(--space-2); }
-.total .label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); display: block; }
-.total .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.value.up { color: var(--positive); }
-.value.down { color: var(--negative); }
-.hint { color: var(--text-muted); font-size: 14px; margin: 0 0 var(--space-6); }
+/* --- Hero（spec §7.3）：資產走勢與持有摘要合成一整片，不是兩張分開的卡片。
+       手機：摘要在走勢圖之前（spec §11.2）——DOM 先摘要、後走勢，行動版直向堆疊。
+       桌機（>= 768px）：走勢左、摘要右，約 7:3；用 row-reverse 讓 DOM 的摘要落到右側。 --- */
+.hero { display: flex; flex-direction: column; gap: var(--space-6); margin: var(--space-6) 0 0;
+        padding: var(--space-6); background: var(--bg-surface);
+        border: 1px solid var(--border-default); border-radius: var(--radius-surface); }
+.hero__trend { min-width: 0; }
+.hero__summary { min-width: 0; display: flex; flex-direction: column; }
 
-/* --- 走勢圖。灰色斜線區＝當天有持有卡種算不出市值（ADR-0021）；顏色不帶漲跌語意。 --- */
-.trend { margin: var(--space-8) 0 0; }
+@media (min-width: 768px) {
+  .hero { flex-direction: row-reverse; align-items: stretch; }
+  .hero__trend { flex: 7 1 0; }
+  .hero__summary { flex: 3 1 0; border-left: 1px solid var(--border-default); padding-left: var(--space-6); }
+}
+
+/* --- 走勢圖（Hero 左半）。灰色斜線區＝當天有持有卡種算不出市值（ADR-0021）。
+       曲線、量尺、涵蓋率一律中性色，不帶漲跌語意（spec §7.3）。 --- */
 .trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
-.trend h2 { font-size: 16px; margin: 0; }
-.ranges { display: flex; gap: var(--space-1); }
-.ranges button { padding: var(--space-1) var(--space-3); font-size: 12px; letter-spacing: .04em; background: none; border: 1px solid transparent; color: var(--text-secondary); }
-.ranges button:hover { color: var(--text-primary); border-color: var(--border-default); }
-.ranges button.on { border-color: var(--border-strong); background: var(--bg-elevated); color: var(--text-primary); font-weight: 600; }
+.hero__trend h2 { font-size: 16px; margin: 0; }
 .readout { display: flex; flex-wrap: wrap; gap: .2rem 1.4rem; margin: .7rem 0 .3rem; font-size: 14px; font-variant-numeric: tabular-nums; }
 .readout .day { font-weight: 600; }
 .readout em { font-style: normal; color: var(--text-muted); margin-right: .35rem; }
+/* 圖表用標籤自我說明，取代舊版圖下方的教學段落（spec §7.3）。 */
+.trend-legend { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; margin: .45rem 0 0; padding: 0;
+                font-size: 12px; color: var(--text-muted); list-style: none; }
 #trend-chart { display: block; width: 100%; touch-action: none; }
 #trend-chart .axis { stroke: var(--border-strong); }
 #trend-chart .tick { fill: var(--text-muted); font-size: 11px; }
@@ -31,15 +37,31 @@
 #trend-chart .covered { fill: var(--text-muted); }
 #trend-chart .band { fill: rgba(160, 174, 192, .08); }
 #trend-chart .cost { fill: none; stroke: var(--text-muted); stroke-width: 1.5; }
-/* 沿用重做前的綠色（原 #0b7a4b），只是換成 token 表示——**不是**刻意的獲利語意。
-   uiux-spec §7.3 要求走勢線改為中性色，由 #31（trend refinements）處理。 */
-#trend-chart .value { fill: none; stroke: var(--positive); stroke-width: 2; stroke-linejoin: round; }
+/* 市值線：中性色（spec §7.3、#31）。舊版沿用重做前的獲利綠，改回中性——這條線講
+   「總市值多少」，不是「賺賠」。 */
+#trend-chart .value { fill: none; stroke: var(--text-primary); stroke-width: 2; stroke-linejoin: round; }
 #trend-chart .value.partial { stroke-dasharray: 5 3; }
 #trend-chart .guide { stroke: var(--text-muted); }
-#trend-chart .value-dot { fill: var(--positive); }
+#trend-chart .value-dot { fill: var(--text-primary); }
 #trend-chart .cost-dot { fill: var(--text-muted); }
 #trend-hatch line { stroke: var(--text-muted); stroke-width: 1; }
 .trend-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-control); padding: 1.6rem 1.2rem; margin: .7rem 0 0; color: var(--text-muted); font-size: 14px; text-align: center; }
+
+/* --- 持有摘要（Hero 右半）。只講持有中的部位——已實現損益與已售出張數不在這裡
+       （spec §7.3）。層級：總市值最大 → 未實現損益＋報酬率 → 總成本 → 張數＋卡種數。 --- */
+.hero__mv { margin: 0; }
+.hero__mv .metric-label { display: block; }
+.hero__mv .hero-value { display: block; margin-top: var(--space-1); }
+.hero__mv .unit { font-size: 16px; font-weight: 600; color: var(--text-muted); margin-right: .3rem; }
+.hero__pnl { display: flex; flex-wrap: wrap; gap: .1rem 1.8rem; margin: var(--space-4) 0 0; }
+.hero__pnl div { display: flex; flex-direction: column; }
+.hero__pnl .amount { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hero__pnl .metric-label { margin-top: .1rem; }
+.hero__cost { margin: var(--space-4) 0 0; }
+.hero__cost .metric-label { display: block; }
+.hero__cost .figure { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hero__count { margin: var(--space-3) 0 0; font-size: 14px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.hero__coverage-note { margin: var(--space-2) 0 0; font-size: 12px; color: var(--text-muted); }
 
 /* --- 卡圖牆。窄螢幕優先：格子自己換行，頁面本身永不橫向捲動。
        分頁用 radio ＋ :checked 切換，不動 JS。 --- */

@@ -10,50 +10,8 @@
 <body>
 {% include "_app_shell.html" %}
 <div class="wrap">
-  {# 不再重複「收藏總覽」大標題——全站頁首已標明所在頁面（spec §7.1）。 #}
-
-  <div class="totals">
-    {% if summary.valued_count %}
-    <div class="total">
-      <span class="label">未實現損益</span>
-      <span class="value {{ 'up' if summary.unrealized_pnl_twd > 0 else 'down' if summary.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(summary.unrealized_pnl_twd) }}</span>
-    </div>
-    <div class="total">
-      <span class="label">報酬率</span>
-      <span class="value {{ 'up' if summary.unrealized_return_rate > 0 else 'down' if summary.unrealized_return_rate < 0 else '' }}">{{ "{:+.1%}".format(summary.unrealized_return_rate) }}</span>
-    </div>
-    {% endif %}
-    <div class="total">
-      <span class="label">已實現損益</span>
-      <span class="value {{ 'up' if summary.realized_pnl_twd > 0 else 'down' if summary.realized_pnl_twd < 0 else '' }}">{{ "{:,}".format(summary.realized_pnl_twd) }}</span>
-    </div>
-    <div class="total">
-      <span class="label">持有中</span>
-      <span class="value">{{ summary.held_count }} 張</span>
-    </div>
-    <div class="total">
-      <span class="label">持有中總成本</span>
-      <span class="value">{{ "{:,}".format(summary.held_cost_twd) }}</span>
-    </div>
-    {% if summary.valued_count %}
-    <div class="total">
-      <span class="label">持有中總市值</span>
-      <span class="value">{{ "{:,}".format(summary.held_market_value_twd) }}</span>
-    </div>
-    {% endif %}
-    <div class="total">
-      <span class="label">已售出</span>
-      <span class="value">{{ summary.sold_count }} 張</span>
-    </div>
-  </div>
-  <p class="hint">
-    金額一律新台幣。未實現損益（持有中，市值 − 成本）與已實現損益（已售出，售出價 − 成本）分開計算，不混入同一個數字。
-    報酬率為未實現損益對持有成本，只涵蓋算得出市值的那幾張。
-    {% if summary.unvalued_count %}
-      持有中還有 {{ summary.unvalued_count }} 張沒有市值（尚未對應到 SNKRDUNK，或還沒抓到成交紀錄），
-      未列入總市值、未實現損益與報酬率——這三個數字目前只涵蓋 {{ summary.valued_count }} 張。
-    {% endif %}
-  </p>
+  {# 不再重複「收藏總覽」大標題——全站頁首已標明所在頁面（spec §7.1）。
+     總覽數字併入 Hero 的右半、走勢圖下方的教學段落一併移除（#31）。 #}
 
   {% include "_market_freshness.html" %}
 
