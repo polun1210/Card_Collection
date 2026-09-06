@@ -1,9 +1,818 @@
-/* 全站共用的 Design Foundation（ADR-0023）。
- *
- * 這一版**刻意留空**：預先拆檔（prefactor）只把三頁的 inline 樣式原封不動搬成
- * 靜態資源，不抽共用 token、不改任何顏色值／間距／比例。實際的共用內容
- * （深色 token、typography、button、input、tabs、global header、dialog／drawer
- * 基礎）由後續工單 #30 填入。
- *
- * 三頁的 <link> 已經指到這裡，所以之後填內容不必再動樣板。
- */
+/* ============================================================================
+   Card Collection — 全站共用 Design Foundation
+   對應 docs/uiux-spec.md §4–§13、ADR-0023、ADR-0022（單一深色系）。
+
+   分工（ADR-0023）：這支只放**設計語言與共用元件**——色票、字體、間距、圓角、
+   邊框、按鈕、輸入、分頁、狀態、全站頁首、對話框／抽屜基礎、⋯ 次選單、toast。
+   各頁的 stylesheet 只放該頁版面與該頁專屬元件，並且一律引用這裡的 token，不再
+   自己寫死顏色。
+
+   不載入 web font、不導入前端框架、不做淺色版、不隨作業系統切換。
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* --- 表面層級（graphite／charcoal，介面退到背景，卡圖才是主要顏色來源） --- */
+  --bg-app: #0B0F14;
+  --bg-surface: #111821;
+  --bg-elevated: #18212B;
+
+  /* --- 邊框（結構主要靠表面色調與細緻邊框；刻意不做 3:1 強對比，這是 spec §4.7
+         的設計意圖，使用者已拍板維持，不是疏漏） --- */
+  --border-default: #26313D;
+  --border-strong: #364453;
+
+  /* --- 文字 --- */
+  --text-primary: #E6EDF3;
+  --text-secondary: #A0AEC0;
+  /* 使用者拍板：由 #718096 上調到 #8494A8。原值負責 12–13px 微中繼資料，在 surface
+     底 4.45、elevated 底 4.05，低於 WCAG AA 4.5；新值 surface 5.77／elevated 5.25，
+     與 --text-secondary（7.91）仍分得出層次。 */
+  --text-muted: #8494A8;
+
+  /* --- 語意色。只用在「有方向的數字」（報酬率、損益）與「注意狀態」。
+         中性數字（市值、成本、張數、PSA 10 張數、成交筆數）一律不著色。 --- */
+  --accent: #6EA8FE;
+  --accent-weak: rgba(110, 168, 254, 0.14);
+  --accent-ink: #0B0F14;        /* accent 底上的文字 */
+  --positive: #59C98C;
+  --negative: #F07178;
+  --warning: #D9A441;
+  --warning-weak: rgba(217, 164, 65, 0.12);
+  --danger: #F07178;
+  --danger-weak: rgba(240, 113, 120, 0.12);
+
+  /* --- 間距（4px base grid，spec §4.5） --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* --- 圓角（spec §4.6，pill 不作為預設語言） --- */
+  --radius-tag: 6px;
+  --radius-control: 8px;
+  --radius-tile: 10px;
+  --radius-surface: 12px;
+
+  /* --- 版面（spec §3.1 的 1440px 目標留給後續版面工單；這裡對齊現有 .wrap 78rem
+         避免 shell 階段悄悄改變三頁內容寬度） --- */
+  --content-max: 78rem;
+  --content-gutter: var(--space-6);
+
+  /* --- 字體（system font stack，不載入 Noto Sans TC，落到系統中文字型） --- */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* --- 陰影：只給真正浮起的層（抽屜／對話框／tile hover），不給 Hero 與一般區塊 --- */
+  --shadow-float: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* 有方向的數字用正負色；中性數字維持 --text-primary。等寬數字讓縱向對得齊。 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+.dir-up {
+  color: var(--positive);
+}
+.dir-down {
+  color: var(--negative);
+}
+
+/* 共用聚焦樣式：accent 外框 + 位移，鍵盤可見 */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+h1 {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+}
+h2 {
+  font-size: 20px;
+  font-weight: 650;
+  margin: var(--space-8) 0 var(--space-3);
+}
+h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------------------
+   版面容器。三頁的 .wrap 都用這個；queue.css 只覆寫 max-width。
+   內容寬度對齊 .app-header__inner。
+   -------------------------------------------------------------------------- */
+.wrap {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-8) var(--content-gutter) var(--space-16);
+}
+
+/* ============================================================================
+   全站頁首（spec §6 / §2.1）
+   桌機：產品名 + 三個導覽 + 常駐主 CTA「＋ 新增持有品」 + 右側低調的「更新行情」
+   小文字連結（使用者拍板的決定 ④：不加框不加底、不用 ⋯ 選單、不做次要按鈕）。
+   手機：精簡頁首 + 原生 <details> 選單（決定 ⑤，不依賴 JS）。
+   ========================================================================== */
+.app-header {
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border-default);
+}
+.app-header__inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-3) var(--content-gutter);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  flex-wrap: wrap;
+}
+.app-header__brand {
+  font-weight: 650;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+.app-header__nav {
+  display: flex;
+  gap: var(--space-5);
+  margin-right: auto;
+}
+/* 頁首右側動作群：更新行情連結 + 主 CTA（+ 手機的選單）。
+   margin-left:auto 讓它在手機（導覽隱藏）時仍靠右。 */
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-left: auto;
+}
+.app-header__nav a {
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: var(--space-2) 0;
+  border-bottom: 2px solid transparent;
+}
+.app-header__nav a:hover {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+/* 作用中的導覽：文字對比 + 克制的 accent 底線，不是大色塊按鈕（spec §6） */
+.app-header__nav a[aria-current="page"] {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+.app-header__update {
+  color: var(--text-muted);
+  font-size: 13px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.app-header__update:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+
+/* 手機選單：桌機隱藏 */
+.nav-menu {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .app-header__nav,
+  .app-header__update,
+  .app-header__cta {
+    /* 手機不是主要寫入環境：導覽與主 CTA 收進 <details> 選單（spec §11.1）。 */
+    display: none;
+  }
+  .app-header__inner {
+    gap: var(--space-3);
+  }
+  .nav-menu {
+    display: block;
+    position: relative;
+  }
+  .nav-menu > summary {
+    list-style: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 22px;
+    line-height: 1;
+    padding: var(--space-1) var(--space-2);
+  }
+  .nav-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+  .nav-menu__panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + var(--space-2));
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-float);
+    min-width: 200px;
+    padding: var(--space-2);
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+  }
+  .nav-menu__panel a {
+    color: var(--text-primary);
+    font-size: 15px;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-tag);
+  }
+  .nav-menu__panel a:hover {
+    background: var(--accent-weak);
+    text-decoration: none;
+  }
+}
+
+/* ============================================================================
+   按鈕（spec §13.1）— 三級視覺強度
+   預設的裸 <button> = secondary（中性表面 + 邊框）。
+   ========================================================================== */
+button,
+.btn {
+  font: inherit;
+  font-size: 14px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  line-height: 1.4;
+}
+/* .btn 也用在 <a>（例如 queue 的 ＋ 新增持有品，那頁沒有持有品編輯器） */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+button:hover,
+.btn:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+}
+button:disabled,
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button:disabled:hover,
+.btn:disabled:hover {
+  border-color: var(--border-strong);
+}
+
+/* primary：accent 實心。給「＋ 新增持有品」「確認」「確認對應」。 */
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.btn-primary:hover {
+  border-color: var(--accent);
+  filter: brightness(1.08);
+}
+
+/* secondary：與裸 button 相同，明確標示用。給「取消」「編輯」「售出」「重試」。 */
+.btn-secondary {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* destructive：一般狀態深底 + 紅字紅框；實心紅只留給最終確認對話框。 */
+.btn-danger {
+  background: var(--bg-elevated);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btn-danger:hover {
+  background: var(--danger-weak);
+  border-color: var(--danger);
+}
+.btn-danger-strong {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.btn-danger-strong:hover {
+  border-color: var(--danger);
+  filter: brightness(1.06);
+}
+
+/* 文字按鈕：列內入口（售出／編輯／刪除）。不佔框、不佔底。 */
+.btn-link,
+button.link {
+  border: 0;
+  background: none;
+  padding: var(--space-1) var(--space-2);
+  color: var(--accent);
+  font-size: 13px;
+}
+button.link.danger {
+  color: var(--danger);
+}
+.btn-link:hover,
+button.link:hover {
+  border-color: transparent;
+  text-decoration: underline;
+}
+
+/* ============================================================================
+   輸入（spec §13.2）— 標籤在上、不用浮動標籤、accent 聚焦邊框 + 聚焦環
+   ========================================================================== */
+input,
+select,
+textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-weak);
+}
+input[aria-invalid="true"],
+.input-error input,
+input.is-error {
+  border-color: var(--danger);
+}
+
+/* 表單欄位：標籤一律在上 */
+.field {
+  display: block;
+  margin-top: var(--space-3);
+}
+.field > span {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.field input,
+.field select {
+  width: 100%;
+}
+
+/* ============================================================================
+   分頁（spec §13.3）— 文字分頁 + 作用中底線，不用大色塊按鈕
+   卡圖牆與卡種對應歷史都用 radio + :checked，不依賴腳本。
+   ========================================================================== */
+.tabs {
+  display: flex;
+  gap: var(--space-5);
+  border-bottom: 1px solid var(--border-default);
+}
+.tabs label,
+.tabs a,
+.tabs button {
+  font: inherit;
+  font-size: 14px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: var(--space-2) 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.tabs label:hover {
+  color: var(--text-primary);
+}
+.tabs .is-active,
+.tabs label.is-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+/* ============================================================================
+   狀態語言（spec §12）— 四族
+   normal（無裝飾）／warning（琥珀）／pending·missing（中性，非錯誤）／
+   error·destructive（紅，只給真正的失敗或破壞性動作）
+   ========================================================================== */
+
+/* warning：資料存在但需要注意（系統行情過期、卡片市值過期） */
+.status-warning {
+  color: var(--warning);
+  background: var(--warning-weak);
+  border: 1px solid var(--warning);
+  border-left-width: 3px;
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+  font-size: 14px;
+}
+
+/* pending / missing：不是錯誤。沒有市值、動能累積中、還沒選候選。中性樣式。 */
+.status-pending {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  padding: 1px var(--space-3);
+}
+
+/* error / destructive：實際失敗或破壞性動作 */
+.status-error {
+  color: var(--danger);
+  background: var(--danger-weak);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+  font-size: 14px;
+}
+
+/* 行情新鮮度警示（_market_freshness.html，收藏總覽 + 持有品共用）。
+   健康時整塊不渲染（uiux-spec §7.2）；只有過期／失敗／進行中才出現。 */
+.freshness {
+  font-size: 14px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-4) 0 0;
+}
+.freshness.stale {
+  color: var(--warning);
+  border-color: var(--warning);
+  border-left-color: var(--warning);
+  background: var(--warning-weak);
+}
+.freshness .failed {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--negative);
+}
+.freshness .running {
+  display: block;
+  margin-top: var(--space-2);
+}
+.freshness__act {
+  margin-left: var(--space-3);
+  font-size: 13px;
+  padding: var(--space-1) var(--space-3);
+}
+
+/* 更新行情的逐張明細報告（收藏總覽 + 持有品共用）。預設收合。 */
+#crawl-report {
+  display: none;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+#crawl-report ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+#crawl-report.bad {
+  border-color: var(--negative);
+  color: var(--negative);
+}
+#crawl-report .fxdown {
+  color: var(--warning);
+}
+
+/* ============================================================================
+   共用表格基礎（持有品帳本 + 卡種對應歷史）
+   兩頁的 .tblwrap 與表格骨架逐字相同（ADR-0023 Context 第 2 條、interface.md
+   §7.4）。各頁只保留自己不同的：table 的 min-width、td.num 靠右與否、td.norm。
+   ========================================================================== */
+.tblwrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+th,
+td {
+  padding: 0.55rem 0.9rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default);
+  vertical-align: top;
+}
+thead th {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+/* 數字欄一律等寬、不換行（interface.md §4 全站慣例）。靠右與否各頁自訂。 */
+td.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   對話框 / 抽屜基礎（spec §8 / §13）
+   ⚠ 抽屜的實際互動（桌機右側浮出、手機全螢幕）由 #33 實作；這裡只給表面、
+   邊框、圓角、陰影的基礎，讓 #33 直接接。
+   ========================================================================== */
+dialog {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-surface);
+  padding: var(--space-6);
+  max-width: 26rem;
+  width: 90vw;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-float);
+}
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+dialog h3 {
+  margin: 0 0 var(--space-1);
+  font-size: 16px;
+  font-weight: 600;
+}
+dialog .about {
+  margin: 0 0 var(--space-3);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+dialog label {
+  display: block;
+  margin-top: var(--space-3);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+dialog input,
+dialog select {
+  width: 100%;
+  margin-top: var(--space-1);
+}
+dialog menu {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  margin: var(--space-6) 0 0;
+  padding: 0;
+}
+
+/* 抽屜基礎骨架（#33 會擴充） */
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 460px;
+  max-width: 92vw;
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-float);
+  overflow-y: auto;
+  z-index: 60;
+}
+@media (max-width: 767px) {
+  .drawer {
+    width: 100%;
+    max-width: 100%;
+    border-left: 0;
+  }
+}
+
+/* 對話框 / 抽屜內的輔助文字 */
+.err {
+  color: var(--danger);
+  font-size: 13px;
+  margin: var(--space-3) 0 0;
+}
+.willchange {
+  color: var(--warning);
+  font-size: 13px;
+  margin: var(--space-2) 0 0;
+}
+
+/* ============================================================================
+   ⋯ 次選單（spec §9.5 / §10.9 / §10.11）
+   低頻或慎重的動作收進來：刪除、改回持有中、推翻對應、不納入行情。
+   原生 <details>，不依賴 JS。#34 / #35 直接用。
+   ========================================================================== */
+.more {
+  position: relative;
+  display: inline-block;
+}
+.more > summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-tag);
+}
+.more > summary::-webkit-details-marker {
+  display: none;
+}
+.more > summary:hover {
+  color: var(--text-secondary);
+}
+.more__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-1));
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-float);
+  min-width: 180px;
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+}
+.more__panel button,
+.more__panel a {
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  font-size: 14px;
+  color: var(--text-primary);
+  border-radius: var(--radius-tag);
+}
+.more__panel button:hover,
+.more__panel a:hover {
+  background: var(--accent-weak);
+  text-decoration: none;
+}
+.more__panel .danger {
+  color: var(--danger);
+}
+
+/* ============================================================================
+   Toast（spec §10.10）— 確認對應等成功回饋的簡短提示，不打斷流程
+   #35 用 showToast()（見 _app_shell.html）觸發。
+   ========================================================================== */
+.toast-tray {
+  position: fixed;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 80;
+}
+.toast {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-3) var(--space-4);
+  font-size: 14px;
+  color: var(--text-primary);
+  max-width: 22rem;
+}
+.toast.is-error {
+  border-left-color: var(--danger);
+}
+
+/* ============================================================================
+   走勢圖區間鈕（spec §7.3，7D / 1M / 3M / YTD / ALL）— #31 用
+   ========================================================================== */
+.range {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+.range button {
+  padding: var(--space-1) var(--space-3);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+}
+.range button:hover {
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+.range button.on {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--bg-elevated);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   Hero 金額排版（spec §4.4 type scale / §7.3）— #31 用
+   ========================================================================== */
+.hero-value {
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.metric-label {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* ============================================================================
+   卡圖牆 tile hover / 候選卡「已選取」（spec §7.6 / §10.7）— #32 / #35 用
+   ========================================================================== */
+.tile {
+  border: 1px solid transparent;
+  border-radius: var(--radius-tile);
+}
+.tile:hover,
+.tile:focus-within {
+  border-color: var(--border-strong);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-float);
+}
+
+/* 候選卡：選取態 = accent 邊框 + 微幅浮起表面 + 小勾（容器本身就是可選目標） */
+.candidate {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-tile);
+}
+.candidate.is-selected {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+.candidate.is-selected::after {
+  content: "✓";
+  color: var(--accent);
+}
+
+/* ============================================================================
+   空狀態文字（spec §13.4）— 簡短，不加 onboarding 段落、不加大圖示
+   ========================================================================== */
+.empty-note {
+  color: var(--text-muted);
+  font-size: 14px;
+}

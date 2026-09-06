@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/holdings.css">
 </head>
 <body>
+{% include "_app_shell.html" %}
 <div class="wrap">
   <h1>持有品</h1>
 
@@ -49,12 +50,11 @@
 
   {% include "_market_freshness.html" %}
 
+  {# 更新行情、＋ 新增持有品、到卡種對應的連結都移到全站頁首。新增卡種是這一頁
+     專屬的操作，留在這裡。 #}
   <div class="toolbar">
     <h2>依卡種</h2>
-    <button id="crawl" onclick="crawlMarket(this)">更新行情</button>
-    <button onclick="openCreate()">新增持有品</button>
     <button onclick="openKind()">新增卡種</button>
-    <a href="/queue">回卡種對應</a>
   </div>
   <div id="crawl-report"></div>
 

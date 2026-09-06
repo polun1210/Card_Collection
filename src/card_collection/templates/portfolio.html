@@ -8,8 +8,9 @@
 <link rel="stylesheet" href="/static/portfolio.css">
 </head>
 <body>
+{% include "_app_shell.html" %}
 <div class="wrap">
-  <h1>收藏總覽</h1>
+  {# 不再重複「收藏總覽」大標題——全站頁首已標明所在頁面（spec §7.1）。 #}
 
   <div class="totals">
     {% if summary.valued_count %}
@@ -56,14 +57,8 @@
 
   {% include "_market_freshness.html" %}
 
-  <div class="toolbar">
-    <button id="crawl" onclick="crawlMarket(this)">更新行情</button>
-    {# 新增只有一份，長在頁面層級：它不屬於任何一張既有的持有品，每格一顆會把
-       畫面塞滿六十八顆一模一樣的按鈕。 #}
-    <button onclick="openCreate()">新增持有品</button>
-    <a href="/holdings">持有品逐筆明細</a>
-    <a href="/queue">待審佇列</a>
-  </div>
+  {# 更新行情與 ＋ 新增持有品 移到全站頁首；到持有品／卡種對應的連結由頁首導覽
+     提供。這個 div 是更新行情逐張報告的落點，crawlMarket() 往這裡寫。 #}
   <div id="crawl-report"></div>
 
   {% include "_portfolio_hero.html" %}

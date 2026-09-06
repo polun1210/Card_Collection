@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/queue.css">
 </head>
 <body>
+{% include "_app_shell.html" %}
 <div class="wrap">
   <h1>卡種對應</h1>
   <p class="progress">已確認 {{ progress.confirmed }} ／ 已否決 {{ progress.rejected }} ／ 待處理 {{ progress.pending }}</p>

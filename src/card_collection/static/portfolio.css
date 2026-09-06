@@ -1,105 +1,85 @@
-  :root { color-scheme: light dark; }
-  body { font-family: "Noto Sans TC", system-ui, sans-serif; margin: 0; padding: 2rem 1.5rem 4rem; line-height: 1.6; }
-  .wrap { max-width: 78rem; margin: 0 auto; }
-  h1 { font-size: 1.5rem; margin: 0 0 .3rem; }
-  .totals { display: flex; flex-wrap: wrap; gap: 2.5rem; margin: 1.2rem 0 .6rem; }
-  .total .label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; display: block; }
-  .total .value { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .value.up { color: #0b7a4b; }
-  .value.down { color: #b91c1c; }
-  .hint { color: #6b7280; font-size: .9rem; margin: 0 0 1.5rem; }
-  .toolbar { display: flex; align-items: baseline; gap: 1rem; margin: 2rem 0 .8rem; flex-wrap: wrap; }
-  .toolbar a { font-size: .84rem; }
-  button { font: inherit; font-size: .86rem; padding: .3rem .9rem; border-radius: 4px; border: 1px solid #9ca3af; background: transparent; color: inherit; cursor: pointer; }
-  button:disabled { opacity: .5; cursor: default; }
-  /* 以下兩組規則與 _market_freshness.html、_market_script.html 的 markup 對應。
-     樣式刻意留在各頁自己的 <style> 裡——版面之後會由 UIUX 階段重做，共用樣式會
-     讓兩頁被綁在一起改。行為共用，外觀不共用。 */
-  .freshness { font-size: .86rem; color: #4b5563; border: 1px solid #d1d5db; border-left-width: 4px; border-radius: 4px; padding: .55rem .8rem; margin: 1.5rem 0 0; }
-  .freshness.stale { border-color: #b45309; border-left-color: #b45309; color: #b45309; background: rgba(180, 83, 9, .06); }
-  .freshness .failed { display: block; margin-top: .35rem; color: #b91c1c; }
-  .freshness .running { display: block; margin-top: .35rem; }
-  #crawl-report { display: none; margin: .6rem 0 0; padding: .7rem .9rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: .86rem; }
-  #crawl-report ul { margin: .4rem 0 0; padding-left: 1.2rem; }
-  #crawl-report.bad { border-color: #b91c1c; color: #b91c1c; }
-  #crawl-report .fxdown { color: #b45309; }
-  /* 走勢圖。灰色斜線區＝當天有持有卡種算不出市值，與足額區段一眼分得開
-     （ADR-0021）；顏色刻意不帶漲跌語意，那是給數字用的。 */
-  .trend { margin: 2rem 0 0; }
-  .trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-  .trend h2 { font-size: 1rem; margin: 0; }
-  .ranges { display: flex; gap: .3rem; }
-  .ranges button { padding: .2rem .6rem; font-size: .78rem; letter-spacing: .04em; }
-  .ranges button.on { border-color: #4b5563; background: rgba(107, 114, 128, .16); font-weight: 600; }
-  .readout { display: flex; flex-wrap: wrap; gap: .2rem 1.4rem; margin: .7rem 0 .3rem; font-size: .86rem; font-variant-numeric: tabular-nums; }
-  .readout .day { font-weight: 600; }
-  .readout em { font-style: normal; color: #6b7280; margin-right: .35rem; }
-  #trend-chart { display: block; width: 100%; touch-action: none; }
-  #trend-chart .axis { stroke: #d1d5db; }
-  #trend-chart .tick { fill: #9ca3af; font-size: 11px; }
-  #trend-chart .gap { fill: url(#trend-hatch); }
-  #trend-chart .covered { fill: #9ca3af; }
-  #trend-chart .band { fill: rgba(107, 114, 128, .09); }
-  #trend-chart .cost { fill: none; stroke: #6b7280; stroke-width: 1.5; }
-  #trend-chart .value { fill: none; stroke: #0b7a4b; stroke-width: 2; stroke-linejoin: round; }
-  #trend-chart .value.partial { stroke-dasharray: 5 3; }
-  #trend-chart .guide { stroke: #9ca3af; }
-  #trend-chart .value-dot { fill: #0b7a4b; }
-  #trend-chart .cost-dot { fill: #6b7280; }
-  #trend-hatch line { stroke: #9ca3af; stroke-width: 1; }
-  .trend-empty { border: 1px dashed #9ca3af; border-radius: 4px; padding: 1.6rem 1.2rem; margin: .7rem 0 0; color: #6b7280; font-size: .9rem; text-align: center; }
-  /* 卡圖牆。窄螢幕優先：格子自己換行，頁面本身永不橫向捲動——這正是表格骨架的痛點。
-     分頁用 radio ＋ :checked 切換，不動 JS：唯讀的畫面沒有理由等腳本跑完才長出來。 */
-  .wall { margin: 2rem 0 0; }
-  .wall > input { position: absolute; opacity: 0; pointer-events: none; }
-  .wall .tabs { display: flex; gap: .3rem; border-bottom: 1px solid #d1d5db; }
-  .wall .tabs label { font-size: .9rem; padding: .45rem .9rem; border: 1px solid transparent; border-bottom: none; border-radius: 4px 4px 0 0; color: #6b7280; cursor: pointer; }
-  #wall-tab-held:checked ~ .tabs label[for="wall-tab-held"],
-  #wall-tab-sold:checked ~ .tabs label[for="wall-tab-sold"] { color: inherit; font-weight: 600; border-color: #d1d5db; background: rgba(107, 114, 128, .08); }
-  #wall-tab-held:focus-visible ~ .tabs label[for="wall-tab-held"],
-  #wall-tab-sold:focus-visible ~ .tabs label[for="wall-tab-sold"] { outline: 2px solid #2563eb; outline-offset: 2px; }
-  .wall .grid { display: none; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .9rem; margin: 1.2rem 0 0; }
-  #wall-tab-held:checked ~ #wall-held, #wall-tab-sold:checked ~ #wall-sold { display: grid; }
-  .wall .cell { border: 1px solid #d1d5db; border-radius: 6px; padding: .6rem; }
-  .wall summary { list-style: none; cursor: pointer; }
-  .wall summary::-webkit-details-marker { display: none; }
-  .wall .art { display: block; width: 100%; aspect-ratio: 10/7; object-fit: contain; background: #f3f4f6; border-radius: 4px; }
-  .wall .name { display: block; margin-top: .45rem; font-size: .86rem; line-height: 1.35; }
-  .wall .code { display: block; font-family: ui-monospace, monospace; font-size: .72rem; color: #6b7280; }
-  .wall .rate { display: block; margin-top: .2rem; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .wall .rate.up { color: #0b7a4b; }
-  .wall .rate.down { color: #b91c1c; }
-  .wall .rate.unvalued { font-size: .78rem; font-weight: 400; color: #9ca3af; }
-  .wall dl { margin: .6rem 0 0; padding-top: .6rem; border-top: 1px solid #e5e7eb; font-size: .8rem; }
-  .wall dt { font-size: .7rem; letter-spacing: .06em; color: #6b7280; }
-  .wall dd { margin: 0 0 .5rem; font-variant-numeric: tabular-nums; }
-  .wall dd:last-child { margin: 0; }
-  .wall .lots { margin: .15rem 0 0; padding: 0; list-style: none; color: #4b5563; }
-  .wall .lots li { display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: baseline; justify-content: space-between; font-variant-numeric: tabular-nums; }
-  .wall .acts { display: inline-flex; gap: .1rem; flex-shrink: 0; }
-  /* 已售出那一格的終局數字留在 summary 裡，不必展開就看得到；展開區留給增刪改。
-     summary 只吃 phrasing content，所以這裡是 span 而不是 dl。 */
-  .wall .fact { display: block; margin-top: .2rem; font-size: .8rem; font-variant-numeric: tabular-nums; }
-  .wall .fact em { font-style: normal; font-size: .7rem; letter-spacing: .06em; color: #6b7280; margin-right: .4rem; }
-  .wall summary + .lots { margin: .6rem 0 0; padding-top: .6rem; border-top: 1px solid #e5e7eb; font-size: .8rem; }
-  /* 空狀態。它**不是暫時的鷹架**——新買進的卡種永遠會先經歷「還沒有動能」，資料
-     補齊之後這個狀態依然存在。所以它有自己的一組樣式，看起來像刻意留的位子，
-     而不是一塊沒渲染出來的空白。 */
-  .wall .soon { display: inline-block; font-size: .76rem; color: #6b7280; border: 1px dashed #9ca3af; border-radius: 999px; padding: .02rem .6rem; }
-  .wall .why { display: block; margin-top: .25rem; font-size: .72rem; line-height: 1.45; color: #6b7280; }
-  /* 增刪改的入口。以下與 _holding_editor.html 的 markup 對應——行為共用，外觀不共用。 */
-  button.link { border: none; padding: .1rem .3rem; font-size: .76rem; color: #2563eb; background: transparent; }
-  button.link.danger { color: #b91c1c; }
-  dialog { border: 1px solid #9ca3af; border-radius: 6px; padding: 1.2rem 1.4rem; max-width: 26rem; width: 90vw; color-scheme: light dark; }
-  dialog h3 { margin: 0 0 .2rem; font-size: 1rem; }
-  dialog .about { font-size: .84rem; color: #4b5563; margin: 0 0 .6rem; }
-  dialog label { display: block; margin: .6rem 0 0; font-size: .82rem; color: #4b5563; }
-  dialog input, dialog select { font: inherit; width: 100%; padding: .35rem .5rem; margin-top: .2rem; box-sizing: border-box; }
-  dialog menu { display: flex; gap: .6rem; justify-content: flex-end; margin: 1.2rem 0 0; padding: 0; }
-  .err { color: #b91c1c; font-size: .84rem; margin: .6rem 0 0; }
-  .willchange { color: #b45309; font-size: .84rem; margin: .5rem 0 0; }
-  .wall .sample { display: block; font-size: .72rem; color: #6b7280; }
-  /* 「這個卡種近期沒有成交」與 .freshness.stale 的「整個系統沒能更新」是兩件事，
-     兩者刻意用不同的類別名，免得日後被當成同一種警示改在一起。 */
-  .wall .expired { display: block; font-size: .72rem; color: #b45309; }
-  .wall .empty { color: #6b7280; font-size: .9rem; }
+/* 收藏總覽（/）的版面與專屬元件。共用的設計語言（色票、字體、間距、按鈕、
+   輸入、對話框、頁首、狀態、行情新鮮度、#crawl-report）在 design.css。
+   顏色一律引用 design.css 的 token，不寫死。
+
+   ⚠ Hero、走勢圖、總覽數字的版面重做是 #31；卡圖牆與卡圖比例是 #32。這一版
+   （#30）只把顏色搬到深色 token，版面與比例維持原狀。 */
+
+/* --- 總覽數字（#31 會併入 Hero，暫留這裡） --- */
+.totals { display: flex; flex-wrap: wrap; gap: var(--space-8); margin: var(--space-3) 0 var(--space-2); }
+.total .label { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); display: block; }
+.total .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.value.up { color: var(--positive); }
+.value.down { color: var(--negative); }
+.hint { color: var(--text-muted); font-size: 14px; margin: 0 0 var(--space-6); }
+
+/* --- 走勢圖。灰色斜線區＝當天有持有卡種算不出市值（ADR-0021）；顏色不帶漲跌語意。 --- */
+.trend { margin: var(--space-8) 0 0; }
+.trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.trend h2 { font-size: 16px; margin: 0; }
+.ranges { display: flex; gap: var(--space-1); }
+.ranges button { padding: var(--space-1) var(--space-3); font-size: 12px; letter-spacing: .04em; background: none; border: 1px solid transparent; color: var(--text-secondary); }
+.ranges button:hover { color: var(--text-primary); border-color: var(--border-default); }
+.ranges button.on { border-color: var(--border-strong); background: var(--bg-elevated); color: var(--text-primary); font-weight: 600; }
+.readout { display: flex; flex-wrap: wrap; gap: .2rem 1.4rem; margin: .7rem 0 .3rem; font-size: 14px; font-variant-numeric: tabular-nums; }
+.readout .day { font-weight: 600; }
+.readout em { font-style: normal; color: var(--text-muted); margin-right: .35rem; }
+#trend-chart { display: block; width: 100%; touch-action: none; }
+#trend-chart .axis { stroke: var(--border-strong); }
+#trend-chart .tick { fill: var(--text-muted); font-size: 11px; }
+#trend-chart .gap { fill: url(#trend-hatch); }
+#trend-chart .covered { fill: var(--text-muted); }
+#trend-chart .band { fill: rgba(160, 174, 192, .08); }
+#trend-chart .cost { fill: none; stroke: var(--text-muted); stroke-width: 1.5; }
+/* 沿用重做前的綠色（原 #0b7a4b），只是換成 token 表示——**不是**刻意的獲利語意。
+   uiux-spec §7.3 要求走勢線改為中性色，由 #31（trend refinements）處理。 */
+#trend-chart .value { fill: none; stroke: var(--positive); stroke-width: 2; stroke-linejoin: round; }
+#trend-chart .value.partial { stroke-dasharray: 5 3; }
+#trend-chart .guide { stroke: var(--text-muted); }
+#trend-chart .value-dot { fill: var(--positive); }
+#trend-chart .cost-dot { fill: var(--text-muted); }
+#trend-hatch line { stroke: var(--text-muted); stroke-width: 1; }
+.trend-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-control); padding: 1.6rem 1.2rem; margin: .7rem 0 0; color: var(--text-muted); font-size: 14px; text-align: center; }
+
+/* --- 卡圖牆。窄螢幕優先：格子自己換行，頁面本身永不橫向捲動。
+       分頁用 radio ＋ :checked 切換，不動 JS。 --- */
+.wall { margin: var(--space-8) 0 0; }
+.wall > input { position: absolute; opacity: 0; pointer-events: none; }
+.wall .tabs { display: flex; gap: .3rem; border-bottom: 1px solid var(--border-default); }
+.wall .tabs label { font-size: 14px; padding: .45rem .9rem; border: 1px solid transparent; border-bottom: none; border-radius: var(--radius-tag) var(--radius-tag) 0 0; color: var(--text-secondary); cursor: pointer; }
+#wall-tab-held:checked ~ .tabs label[for="wall-tab-held"],
+#wall-tab-sold:checked ~ .tabs label[for="wall-tab-sold"] { color: var(--text-primary); font-weight: 600; border-color: var(--border-default); background: var(--bg-surface); }
+#wall-tab-held:focus-visible ~ .tabs label[for="wall-tab-held"],
+#wall-tab-sold:focus-visible ~ .tabs label[for="wall-tab-sold"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wall .grid { display: none; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .9rem; margin: 1.2rem 0 0; }
+#wall-tab-held:checked ~ #wall-held, #wall-tab-sold:checked ~ #wall-sold { display: grid; }
+.wall .cell { border: 1px solid var(--border-default); border-radius: var(--radius-tag); padding: .6rem; }
+.wall summary { list-style: none; cursor: pointer; }
+.wall summary::-webkit-details-marker { display: none; }
+.wall .art { display: block; width: 100%; aspect-ratio: 10/7; object-fit: contain; background: var(--bg-surface); border-radius: var(--radius-tag); }
+.wall .name { display: block; margin-top: .45rem; font-size: 14px; line-height: 1.35; }
+.wall .code { display: block; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+.wall .rate { display: block; margin-top: .2rem; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wall .rate.up { color: var(--positive); }
+.wall .rate.down { color: var(--negative); }
+.wall .rate.unvalued { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+.wall dl { margin: .6rem 0 0; padding-top: .6rem; border-top: 1px solid var(--border-default); font-size: 13px; }
+.wall dt { font-size: 12px; letter-spacing: .06em; color: var(--text-muted); }
+.wall dd { margin: 0 0 .5rem; font-variant-numeric: tabular-nums; }
+.wall dd:last-child { margin: 0; }
+.wall .lots { margin: .15rem 0 0; padding: 0; list-style: none; color: var(--text-secondary); }
+.wall .lots li { display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: baseline; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.wall .acts { display: inline-flex; gap: .1rem; flex-shrink: 0; }
+/* 已售出那一格的終局數字留在 summary 裡，不必展開就看得到。 */
+.wall .fact { display: block; margin-top: .2rem; font-size: 13px; font-variant-numeric: tabular-nums; }
+.wall .fact em { font-style: normal; font-size: 12px; letter-spacing: .06em; color: var(--text-muted); margin-right: .4rem; }
+.wall summary + .lots { margin: .6rem 0 0; padding-top: .6rem; border-top: 1px solid var(--border-default); font-size: 13px; }
+/* 空狀態。它不是暫時的鷹架——新買進的卡種永遠會先經歷「還沒有動能」。所以它
+   有自己的一組樣式，看起來像刻意留的位子，而不是一塊沒渲染出來的空白。 */
+.wall .soon { display: inline-block; font-size: 12px; color: var(--text-muted); border: 1px dashed var(--border-strong); border-radius: 999px; padding: .02rem .6rem; }
+.wall .why { display: block; margin-top: .25rem; font-size: 12px; line-height: 1.45; color: var(--text-muted); }
+.wall .sample { display: block; font-size: 12px; color: var(--text-muted); }
+/* 「這個卡種近期沒有成交」與 .freshness.stale 的「整個系統沒能更新」是兩件事，
+   兩者刻意用不同的類別名，免得日後被當成同一種警示改在一起。 */
+.wall .expired { display: block; font-size: 12px; color: var(--warning); }
+.wall .empty { color: var(--text-muted); font-size: 14px; }
