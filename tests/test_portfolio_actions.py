@@ -197,6 +197,11 @@ def test_首頁載得到新增持有品的對話框(client):
     # Assert：頁首的 ＋ 新增持有品（openCreate）用的就是這個對話框
     assert 'id="editor"' in page
     assert 'onclick="openCreate()"' in page
+    # 對話框開得起來還不夠——卡種下拉要有東西可選。all_kinds 現在是首頁 context
+    # 裡唯一只服務於頁首那顆按鈕的欄位，#33 移除牆上全部增刪改之後，它看起來會很像
+    # 可以順手清掉的殘留。清掉的話這頁就再也記不了新的一筆。
+    assert 'id="kind-options"' in page
+    assert "MEGA Lucario（M2a #228）" in page  # 下拉裡真的有卡種可選
 
 
 def test_新增完成後畫面自動反映新狀態(client):
