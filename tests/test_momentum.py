@@ -251,20 +251,21 @@ def _page(client) -> str:
     return client.get("/").text
 
 
-def test_展開區有動能與流動性兩列(client, confirm_card, crawl):
+def test_抽屜的市場區有動能與流動性(client, confirm_card, crawl):
     # Arrange
     confirm_card(client, PRINTING_ERROR)
     crawl(client)
 
-    # Act
+    # Act：抽屜內容 server-render 在每格的 <template> 裡，仍在 HTML 原始碼中
     page = _page(client)
 
-    # Assert
+    # Assert：抽屜殼在，市場區的兩個指標都在
+    assert 'id="card-drawer"' in page
     assert "動能" in page
     assert "流動性" in page
 
 
-def test_流動性在畫面上是敬請期待並說出為什麼(client, confirm_card, crawl):
+def test_流動性在抽屜裡是敬請期待並說出兩個半邊(client, confirm_card, crawl):
     # Arrange
     confirm_card(client, PRINTING_ERROR)
     crawl(client)
@@ -272,12 +273,33 @@ def test_流動性在畫面上是敬請期待並說出為什麼(client, confirm_
     # Act
     page = _page(client)
 
-    # Assert：留一塊空白給人猜，比說「還沒做」更糟
+    # Assert：流動性一筆都還沒在收（PriceCharting 未實作），所以是「敬請期待」而不是
+    # 「資料累積中」——後者會讓畫面說「資料正在累積」，那是第一層的謊。兩個半邊
+    # （PSA 10 張數＋近 3 月成交）永遠並列。
+    assert 'id="card-drawer"' in page
     assert "敬請期待" in page
     assert "PSA 10 張數" in page
+    assert "近 3 月成交" in page
 
 
-def test_動能的空狀態在畫面上叫資料累積中(client, confirm_card, crawl):
+def test_動能的空狀態在抽屜裡叫資料累積中(client, confirm_card, crawl):
+    # Arrange
+    confirm_card(client, PRINTING_ERROR)
+    crawl(client)
+
+    # Act
+    page = _page(client)
+
+    # Assert：動能的來源存在、逐日累積，總有一天算得出來——「資料累積中」是誠實的
+    assert 'id="card-drawer"' in page
+    assert "資料累積中" in page
+
+
+def test_動能與流動性的空狀態用共用的中性樣式(client, confirm_card, crawl):
+    # 意圖不變：兩個未就緒狀態看起來像刻意留的位子，不是一塊沒渲染的空白。#33 之後
+    # 改用共用的 .status-pending（design.css），不再是卡圖牆自己的 .soon。驗**渲染
+    # 出來的 HTML** 用了這個 class，不驗 design.css 的內容——那是共用層、不是這張
+    # 票擁有的檔案，去斷言它日後調整會讓這張票無故變紅。
     # Arrange
     confirm_card(client, PRINTING_ERROR)
     crawl(client)
@@ -286,23 +308,11 @@ def test_動能的空狀態在畫面上叫資料累積中(client, confirm_card, 
     page = _page(client)
 
     # Assert
-    assert "資料累積中" in page
+    assert 'class="status-pending">資料累積中' in page
+    assert 'class="status-pending">敬請期待' in page
 
 
-def test_兩個空狀態有自己的樣式而不是留一塊空白(client):
-    # Act
-    css = client.get("/static/portfolio.css")
-
-    # Assert：意圖是「動能與流動性的空狀態有自己的一組樣式，看起來像刻意留的位子、
-    # 不像一塊沒渲染出來的空白」。ADR-0023 之後樣式從 inline <style> 移進了
-    # static/portfolio.css，改成對樣式表驗證 .wall .soon 這條規則還在；走同一個
-    # TestClient 接縫，順帶確認 /static 掛載沒壞。空狀態的 markup 由
-    # test_動能的空狀態在畫面上叫資料累積中 守。
-    assert css.status_code == 200
-    assert ".wall .soon" in css.text
-
-
-def test_動能展開時才取而不隨頁面一起算(client, confirm_card, crawl):
+def test_動能是打開明細那一刻才取而不隨牆面一起算(client, confirm_card, crawl):
     # Arrange
     confirm_card(client, PRINTING_ERROR)
     crawl(client)
@@ -311,5 +321,7 @@ def test_動能展開時才取而不隨頁面一起算(client, confirm_card, cra
     page = _page(client)
     momentum = _momentum(client, PRINTING_ERROR[3])
 
-    # Assert：首頁的 HTML 裡沒有算好的動能，它由展開那一刻的請求帶回來
+    # Assert：算好的動能不在首頁 HTML 裡（陪站崗的 in：佔位的「資料累積中」在，
+    # 證明抽屜的動能區確實渲染了、只是還沒填值），它由打開明細那一刻的請求帶回來
+    assert "資料累積中" in page
     assert f"{momentum['return_rate']:+.1%}" not in page
