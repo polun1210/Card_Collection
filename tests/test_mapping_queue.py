@@ -4,7 +4,10 @@
 """
 
 import hashlib
+from datetime import timedelta
 from pathlib import Path
+
+from conftest import DEFAULT_NOW, LUCARIO
 
 EXPECTED_CARD_COUNT = 68
 
@@ -136,6 +139,86 @@ def test_佇列頁列出全部待確認卡種(client):
     assert response.status_code == 200
     assert "MEGA Lucario Printing Error" in response.text
     assert "待處理 68" in response.text
+
+
+def test_一次只露出一張待處理卡種並顯示進度(client):
+    import re
+
+    # Act
+    html = client.get("/queue").text
+
+    # Assert：待處理卡種都在 DOM 裡（跳過才不必再打伺服器），但只有第一張露出來，
+    # 其餘都 hidden（spec §10.4）
+    articles = re.findall(r'<article class="focus" data-row="\d+"( hidden)?>', html)
+    assert len(articles) > 1
+    assert articles.count("") == 1, "只有一張待處理卡種是露出的"
+    # 進度以 N / M 呈現
+    assert re.search(r'class="focus__index">\d+</span>\s*/\s*\d+', html)
+
+
+def test_沒有待處理卡種時給一句話而不是空骨架(client_factory, write_notion_csv):
+    # Arrange：一筆持有品都沒有 → 一個待確認卡種都沒有
+    empty = write_notion_csv()
+
+    # Act
+    with client_factory(csv_path=empty) as client:
+        html = client.get("/queue").text
+
+    # Assert：不渲染空的工作區骨架，只給一句話然後接歷史（spec §10.3）
+    assert "目前沒有待處理卡種" in html
+    assert '<article class="focus"' not in html
+    assert '<div class="workspace"' not in html
+    # 一句話排在歷史分頁之前
+    assert html.index("目前沒有待處理卡種") < html.index('id="hist-confirmed"')
+
+
+def test_佇列頁提供跳過稍後處理的入口(client):
+    # Act
+    html = client.get("/queue").text
+
+    # Assert：可以跳過稍後處理（spec §10.4），且跳過是純前端、不打任何端點
+    assert "跳過，稍後處理" in html
+    assert "skipFocus(this)" in html
+
+
+def test_歷史有兩個分頁並提供即時篩選(client, confirm_card):
+    # Arrange
+    confirm_card(client, LUCARIO)
+
+    # Act
+    html = client.get("/queue").text
+
+    # Assert：已確認 / 不納入行情兩個分頁 + 客戶端即時篩選（spec §10.11）
+    assert 'for="hist-confirmed"' in html and 'for="hist-excluded"' in html
+    assert 'oninput="filterHistory(this.value)"' in html
+    assert 'data-search=' in html  # 每一列帶可篩選的卡名／系列／卡號
+
+
+def test_卡種對應頁不顯示全站行情警示(client_factory, confirm_card, crawl):
+    # Arrange：把行情弄成「從未成功」與「已過期」都試過
+    with client_factory() as fresh:
+        assert "從未成功更新過行情" not in fresh.get("/queue").text
+
+    with client_factory() as client:
+        confirm_card(client, LUCARIO)
+        crawl(client)
+    with client_factory(now=DEFAULT_NOW + timedelta(hours=30)) as stale:
+        html = stale.get("/queue").text
+
+    # Assert：卡種對應是對應作業頁、不呈現任何金額，行情新舊不影響判斷（#28 決定二）
+    assert "從未成功更新過行情" not in html
+    assert "已超過 24 小時沒有成功更新" not in html
+    assert 'class="freshness' not in html
+
+
+def test_窄畫面候選直向堆疊(client):
+    # Act：透過 TestClient 取樣式表（#29 的先例）
+    css = client.get("/static/queue.css").text
+
+    # Assert：手機上候選直向堆疊、觸控目標可用（spec §11.6）
+    assert "@media (max-width: 767px)" in css
+    mobile = css.split("@media (max-width: 767px)", 1)[1]
+    assert "grid-template-columns: 1fr" in mobile
 
 
 def test_原始欄位與來源CSV逐字相同(client, notion_csv: Path):

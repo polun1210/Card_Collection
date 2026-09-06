@@ -183,16 +183,32 @@ def test_查無卡種時回404(client):
     assert client.get("/api/cards/999999").status_code == 404
 
 
-def test_佇列頁提供確認與否決的操作(client):
+def test_佇列頁提供確認對應與不納入行情(client):
     # Act
     html = client.get("/queue").text
 
-    # Assert
-    assert "確認" in html and "都不是" in html
+    # Assert：確認對應是一顆獨立按鈕（spec §10.7），不納入行情走 reject（spec §10.9）。
+    # 不用「確認對應」「不納入行情」的純字串比對——_app_shell.html 的 showToast
+    # 註解裡就寫了這幾個詞，那種斷言在舊版頁面也會空洞地為真。
+    assert 'onclick="confirmSelected(this)"' in html
+    assert 'onclick="openExclude(this)"' in html
     assert "/api/mapping/confirm" in html
+    assert "/api/mapping/reject" in html
 
 
-def test_佇列頁列出已確認的卡種並可推翻(client):
+def test_不納入行情收在次選單並說明真正的效果(client):
+    # Act
+    html = client.get("/queue").text
+
+    # Assert：不擺在確認旁邊，收進 ⋯ 次選單（spec §10.9）
+    panel = html.split('class="more__panel"', 1)[1]
+    assert "不納入行情" in panel.split("</div>", 1)[0]
+    # 確認訊息說清楚：不建立行情對應、既有持有品不會被刪除
+    assert "不建立" in html and "SNKRDUNK 行情對應" in html
+    assert "持有品不會被刪除" in html
+
+
+def test_佇列頁的已確認歷史以關係呈現且可推翻(client):
     # Arrange
     row = _find(client, "M2a", "228", "MEGA Lucario")
     _confirm(client, row["id"], MEGA_LUCARIO[0])
@@ -200,9 +216,16 @@ def test_佇列頁列出已確認的卡種並可推翻(client):
     # Act
     html = client.get("/queue").text
 
-    # Assert
-    assert "推翻" in html
-    assert str(MEGA_LUCARIO[0]) in html
+    # Assert：以「我的卡種 ↔ SNKRDUNK 卡」呈現（spec §10.11）
+    assert "↔" in html
+    assert "MEGA Lucario" in html and "メガルカリオ" in html
+    # 推翻對應收在 ⋯ 次選單（用 onclick 比對，不用純字串——_app_shell 的註解裡有這個詞），
+    # 且確認訊息說明卡種回到待處理、持有品不受影響
+    assert 'onclick="openUndo(this)"' in html
+    assert "回到待處理" in html
+    assert "持有品不受影響" in html
+    # 技術 ID 不以資料欄位形式出現在預設畫面（spec §10.11）
+    assert str(MEGA_LUCARIO[1]) not in html  # productCatalogId 完全不出現
 
 
 def test_推翻一個沒有已確認卡種的列回404(client):

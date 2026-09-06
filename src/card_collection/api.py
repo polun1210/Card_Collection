@@ -24,6 +24,7 @@ from .mapping import DEFAULT_BATCH_SIZE, MappingService
 from .market import MarketService
 from .portfolio import overview
 from .repository import CardKindExists, MappingCandidateRepository
+from .snkrdunk import SnkrdunkError
 from .trend import daily_trend, spans_a_year
 
 router = APIRouter()
@@ -562,7 +563,15 @@ def read_queue_page(
     mapping: Mapping,
     limit: Annotated[int, Query(ge=1)] = DEFAULT_BATCH_SIZE,
 ) -> HTMLResponse:
-    mapping.ensure_candidates(limit)
+    try:
+        mapping.ensure_candidates(limit)
+    except SnkrdunkError:
+        # 來源掛掉不該讓整頁 500——待處理清單與歷史都還讀得出來（這是真實發生過的
+        # 當機）。抓不到候選的那幾列 candidates_fetched_at 仍是 NULL，樣板呈現成
+        # 「無法取得 SNKRDUNK 候選」並提供重試（spec §10.8）。ensure_candidates 的
+        # 迴圈在第一列失敗時就中止，其後的列根本沒被嘗試、同樣是 NULL、同樣顯示
+        # 那個狀態——語意上可接受（確實沒取得），但不代表「這一列試過且失敗」。
+        pass
     return request.app.state.templates.TemplateResponse(
         request,
         "queue.html",
@@ -570,6 +579,13 @@ def read_queue_page(
             "active_page": "queue",
             "rows": repository.list_pending(limit=limit),
             "cards": repository.list_cards(),
+            # 被「不納入行情」的卡種（status == rejected）。list_unconfirmed() 回的是
+            # pending + rejected，這裡只留 rejected 給歷史的「不納入行情」分頁（spec §10.11）。
+            "rejected": [
+                row
+                for row in repository.list_unconfirmed()
+                if row["status"] == "rejected"
+            ],
             "progress": repository.progress(),
         },
     )

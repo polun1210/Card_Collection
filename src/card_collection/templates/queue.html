@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>卡種對應 · 待確認清單</title>
+<title>卡種對應</title>
 <link rel="stylesheet" href="/static/design.css">
 <link rel="stylesheet" href="/static/queue.css">
 </head>
@@ -11,124 +11,354 @@
 {% include "_app_shell.html" %}
 <div class="wrap">
   <h1>卡種對應</h1>
-  <p class="progress">已確認 {{ progress.confirmed }} ／ 已否決 {{ progress.rejected }} ／ 待處理 {{ progress.pending }}</p>
-  <p class="hint">卡號相同的卡會撈到同一批候選，靠卡圖分辨。撈不到對的就手動填 apparel id。</p>
-  <div id="error"></div>
 
-  <div class="tblwrap">
-    <table>
-      <thead>
-        <tr><th>系列</th><th>卡號</th><th>卡名</th><th>正規化後</th><th>SNKRDUNK 候選</th><th>操作</th></tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        <tr>
-          <td>{{ row.series_raw }}</td>
-          <td class="num">{{ row.number_raw }}</td>
-          <td>{{ row.card_name_raw }}</td>
-          <td class="norm">{{ row.series_normalized }} / {{ row.number_normalized }}</td>
-          <td>
-            {% if row.candidates %}
-            <div class="cands">
-              {% for candidate in row.candidates %}
-              <div class="cand">
-                <img src="{{ candidate.image_url }}" alt="{{ candidate.name_ja }}" loading="lazy">
-                <span class="code">{{ candidate.card_code }}</span>
-                <span>{{ candidate.name_en }}</span>
-                <span class="ja">{{ candidate.name_ja }}</span>
-                <button class="primary"
-                        onclick="confirmCard({{ row.id }}, {{ candidate.apparel_id }})">確認</button>
-              </div>
-              {% endfor %}
-            </div>
-            {% else %}
-            <span class="none">查無候選</span>
-            {% endif %}
-            <div class="manual">
-              <input type="number" id="manual-{{ row.id }}" placeholder="apparel id">
-              <button onclick="confirmManual({{ row.id }})">用這個 id 確認</button>
-            </div>
-          </td>
-          <td class="actions">
-            <button class="danger" onclick="rejectRow({{ row.id }})">都不是</button>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  {# 輕量摘要（spec §10.2）：只有待處理在有工作時被強調。 #}
+  <p class="tally">
+    <span class="tally__item{{ ' is-strong' if progress.pending else '' }}">待處理 {{ progress.pending }}</span>
+    <span class="tally__item">已確認 {{ progress.confirmed }}</span>
+    <span class="tally__item">不納入行情 {{ progress.rejected }}</span>
+  </p>
 
-  {% if cards %}
-  <div class="toolbar">
-    <h2>已確認的卡種（{{ cards | length }}）</h2>
-    <a href="/api/mapping/export.csv" download>下載對照清單 CSV</a>
+  {# 行內錯誤回饋。成功回饋走共用的 showToast()（spec §10.10）。 #}
+  <p id="feedback" class="status-error" hidden></p>
+
+  {% if rows %}
+  {# 一次只處理一個（spec §10.4）：所有待處理卡種都在 DOM 裡，CSS 只露出第一張，
+     其餘 hidden。沒有 JS 時「確認／不納入行情」會重新載入、自然前進到下一張；
+     「跳過」需要 JS。 #}
+  <div class="workspace" id="workspace">
+    {% for row in rows %}
+    <article class="focus" data-row="{{ row.id }}"{{ ' hidden' if not loop.first else '' }}>
+      <p class="focus__progress"><span class="focus__index">{{ loop.index }}</span> / {{ rows | length }}</p>
+
+      <div class="focus__grid">
+        <section class="mine">
+          <h2>我的卡種</h2>
+          {# 還沒對應到卡圖，用文字身分即可，不生一張假圖（spec §10.5）。持有張數
+             不在待確認列的 context 裡（後端未為此頁擴充），所以只給文字身分。 #}
+          <p class="mine__name">{{ row.card_name_raw }}</p>
+          <p class="mine__meta">{{ row.series_raw }} #{{ row.number_raw }}</p>
+        </section>
+
+        <section class="cands">
+          <h2>SNKRDUNK 候選</h2>
+          {% if row.candidates %}
+          <ul class="cand-list">
+            {% for candidate in row.candidates %}
+            {# 容器本身就是可選目標（spec §10.6），候選卡邊框比卡圖牆重。技術 ID
+               （apparel id / productCatalogId）不出現在畫面上，只留在挑選按鈕的參數裡。 #}
+            <li class="candidate" data-apparel="{{ candidate.apparel_id }}">
+              <button type="button" class="candidate__pick" onclick="pickCandidate(this)">
+                <img class="candidate__art" src="{{ candidate.image_url }}" alt="{{ candidate.name_ja }}" loading="lazy">
+                <span class="candidate__name">{{ candidate.name_en }}</span>
+                <span class="candidate__code">{{ candidate.card_code }}</span>
+                <span class="candidate__ja">{{ candidate.name_ja }}</span>
+              </button>
+            </li>
+            {% endfor %}
+          </ul>
+          {# 選擇候選與確認對應是兩個分開的步驟（spec §10.7）：點選只進入選取狀態，
+             要再按這顆才寫入。 #}
+          <div class="confirm-bar">
+            <button type="button" class="btn btn-primary confirm-bar__go" onclick="confirmSelected(this)" disabled>確認對應</button>
+            <span class="confirm-bar__hint">先點一張候選，再按確認</span>
+          </div>
+          {% elif row.candidates_fetched_at %}
+          {# 搜尋成功、零結果——中性狀態，不是錯誤（spec §10.8）。 #}
+          <p class="status-pending cands__state">沒有找到候選</p>
+          <p class="cands__note">SNKRDUNK 上沒有這張卡的 PSA 10 在賣。可以先跳過，或在 ⋯ 裡選「不納入行情」。</p>
+          {% else %}
+          {# 來源／網路失敗——與「沒有找到候選」必須長得不一樣（spec §10.8）。
+             注意：ensure_candidates 的迴圈在第一張失敗時就中止，排在後面的卡種
+             其實沒被嘗試過，但同樣是「還沒成功取得」，一併走這個狀態。重試會對
+             這一張單獨再打一次 /api/mapping/candidates/{id}。 #}
+          <div class="cands__error">
+            <p class="status-error cands__state">無法取得 SNKRDUNK 候選</p>
+            <p class="cands__note">來源或網路暫時有問題。這不代表這張卡沒有候選。</p>
+            <button type="button" class="btn btn-secondary" onclick="retryCandidates(this)">重試</button>
+          </div>
+          {% endif %}
+
+          <details class="manual">
+            <summary>找不到對的候選？手動指定 apparel id</summary>
+            <div class="manual__row">
+              <input type="number" class="manual__input" inputmode="numeric" placeholder="apparel id">
+              <button type="button" class="btn btn-secondary" onclick="confirmManual(this)">用這個 id 確認</button>
+            </div>
+          </details>
+        </section>
+      </div>
+
+      <div class="focus__actions">
+        {# 跳過不改動任何領域狀態（spec §10.4），純前端換下一張。 #}
+        <button type="button" class="btn btn-secondary" onclick="skipFocus(this)">跳過，稍後處理</button>
+        <details class="more">
+          <summary aria-label="更多動作">⋯</summary>
+          <div class="more__panel">
+            {# 不納入行情是慎重的決定，收在這裡、不擺在確認旁邊（spec §10.9）。 #}
+            <button type="button" class="danger" onclick="openExclude(this)">不納入行情</button>
+          </div>
+        </details>
+      </div>
+    </article>
+    {% endfor %}
   </div>
-  <div class="tblwrap">
-    <table>
-      <thead>
-        <tr><th>卡圖</th><th>Notion 寫法</th><th>apparel id</th><th>productCatalogId</th><th>卡種代碼</th><th>卡名</th><th>操作</th></tr>
-      </thead>
-      <tbody>
-        {% for card in cards %}
-        <tr>
-          <td>
-            {% if card.image_local_path %}
-            <img class="thumb" src="/api/cards/{{ card.apparel_id }}/image" alt="{{ card.name_ja }}" loading="lazy">
-            {% else %}
-            <span class="missing">卡圖缺失</span>
-            {% endif %}
-          </td>
-          <td>{{ card.series_raw }} {{ card.number_raw }} {{ card.card_name_raw }}</td>
-          <td class="num">{{ card.apparel_id }}</td>
-          <td class="num">{{ card.product_catalog_id }}</td>
-          <td class="norm">{{ card.card_code }}</td>
-          <td>{{ card.name_ja }}</td>
-          <td class="actions">
-            {% if not card.image_local_path %}
-            <button onclick="refetchImage({{ card.apparel_id }})">補圖</button>
-            {% endif %}
-            <button class="danger" onclick="undoConfirm({{ card.mapping_candidate_id }})">推翻</button>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  {% else %}
+  {# 沒有待處理時不渲染空的表格骨架，給一句話然後接歷史（spec §10.3）。 #}
+  <p class="no-pending">目前沒有待處理卡種</p>
   {% endif %}
+
+  {# 歷史（spec §10.11）：工作區下方，兩個分頁，附即時篩選。分頁用 radio + :checked，
+     不依賴腳本。 #}
+  <section class="history">
+    <input type="radio" name="hist" id="hist-confirmed" checked>
+    <input type="radio" name="hist" id="hist-excluded">
+    <div class="tabs">
+      <label for="hist-confirmed">已確認 {{ cards | length }}</label>
+      <label for="hist-excluded">不納入行情 {{ rejected | length }}</label>
+    </div>
+
+    <input type="search" class="history__filter" id="history-filter" aria-label="篩選歷史"
+           placeholder="篩選卡名、系列、卡號" oninput="filterHistory(this.value)" autocomplete="off">
+
+    <div class="history__panel" id="hist-panel-confirmed">
+      {% if cards %}
+      <a class="history__export" href="/api/mapping/export.csv" download>下載對照清單 CSV</a>
+      <ul class="rel-list">
+        {% for card in cards %}
+        <li class="rel"
+            data-kind-row="{{ card.mapping_candidate_id }}"
+            data-search="{{ (card.card_name_raw ~ ' ' ~ card.series_raw ~ ' ' ~ card.number_raw ~ ' ' ~ card.name_ja ~ ' ' ~ (card.name_en or '') ~ ' ' ~ card.card_code) | lower }}">
+          {% if card.image_local_path %}
+          <img class="rel__art" src="/api/cards/{{ card.apparel_id }}/image" alt="" loading="lazy">
+          {% else %}
+          <span class="rel__art rel__art--missing" aria-hidden="true">無圖</span>
+          {% endif %}
+          {# 以「我的卡種 ↔ SNKRDUNK 卡」的關係呈現，技術 ID 留在預設畫面外（spec §10.11）。 #}
+          <span class="rel__mine">{{ card.card_name_raw }} · {{ card.series_raw }} #{{ card.number_raw }}</span>
+          <span class="rel__arrow" aria-hidden="true">↔</span>
+          <span class="rel__snkr">{{ card.name_ja }} · {{ card.card_code }}</span>
+          <details class="more rel__more">
+            <summary aria-label="更多動作">⋯</summary>
+            <div class="more__panel">
+              {% if not card.image_local_path %}
+              <button type="button" onclick="refetchImage(this)" data-apparel="{{ card.apparel_id }}">補上卡圖</button>
+              {% endif %}
+              <button type="button" class="danger" onclick="openUndo(this)">推翻對應</button>
+            </div>
+          </details>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-note">還沒有已確認的卡種。</p>
+      {% endif %}
+    </div>
+
+    <div class="history__panel" id="hist-panel-excluded">
+      {% if rejected %}
+      <ul class="rel-list">
+        {% for row in rejected %}
+        <li class="rel rel--excluded"
+            data-search="{{ (row.card_name_raw ~ ' ' ~ row.series_raw ~ ' ' ~ row.number_raw) | lower }}">
+          <span class="rel__mine">{{ row.card_name_raw }} · {{ row.series_raw }} #{{ row.number_raw }}</span>
+          <span class="rel__note">不納入行情</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-note">沒有標為不納入行情的卡種。</p>
+      {% endif %}
+    </div>
+  </section>
 </div>
 
+{# 不納入行情／推翻對應的確認：原生 <dialog>，說清楚真正的效果（spec §10.9 / §10.11）。 #}
+<dialog id="act-dialog">
+  <h3 id="act-title"></h3>
+  <p class="about" id="act-body"></p>
+  <p class="willchange" id="act-note"></p>
+  <menu>
+    <button type="button" value="cancel" onclick="closeActDialog()">取消</button>
+    <button type="button" class="btn-danger-strong" id="act-go">確認</button>
+  </menu>
+</dialog>
+
 <script>
-  async function send(url, options) {
-    const box = document.getElementById("error");
-    box.style.display = "none";
-    const response = await fetch(url, options);
-    if (response.ok) { location.reload(); return; }
-    const body = await response.json().catch(() => ({ detail: response.statusText }));
-    box.textContent = "失敗：" + (body.detail || response.status);
-    box.style.display = "block";
-  }
-  const asJson = (payload) => ({
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  function confirmCard(rowId, apparelId) {
-    send("/api/mapping/confirm", asJson({ mapping_candidate_id: rowId, apparel_id: apparelId }));
-  }
-  function confirmManual(rowId) {
-    const value = document.getElementById("manual-" + rowId).value;
-    if (!value) { return; }
-    confirmCard(rowId, Number(value));
-  }
-  function rejectRow(rowId) {
-    send("/api/mapping/reject", asJson({ mapping_candidate_id: rowId }));
-  }
-  function refetchImage(apparelId) {
-    send("/api/cards/" + apparelId + "/image", { method: "POST" });
-  }
-  function undoConfirm(rowId) {
-    send("/api/mapping/confirm/" + rowId, { method: "DELETE" });
-  }
+  (function () {
+    const feedback = document.getElementById("feedback");
+    const dialog = document.getElementById("act-dialog");
+    let total = document.querySelectorAll(".workspace .focus").length;
+    let position = 1;
+
+    // --- 通用送出 -------------------------------------------------------
+    function fail(message) {
+      feedback.textContent = "失敗：" + message;
+      feedback.hidden = false;
+    }
+
+    async function post(url, options) {
+      feedback.hidden = true;
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      const body = await response.json().catch(() => ({ detail: response.statusText }));
+      fail(body.detail || response.status);
+      return null;
+    }
+
+    const asJson = (payload) => ({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    // 確認／不納入行情／推翻成功後，重新載入讓待處理清單與歷史都反映真實狀態
+    // （spec §10.10 的「自動前進」）。toast 撐不過 reload，用 sessionStorage 接力。
+    function reloadWithToast(message) {
+      try { sessionStorage.setItem("queue-flash", message); } catch (error) { /* 私密瀏覽 */ }
+      location.reload();
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      let flash = null;
+      try { flash = sessionStorage.getItem("queue-flash"); sessionStorage.removeItem("queue-flash"); }
+      catch (error) { /* 讀不到就算了 */ }
+      if (flash && typeof showToast === "function") showToast(flash);
+    });
+
+    function currentFocus() {
+      return document.querySelector(".workspace .focus:not([hidden])");
+    }
+
+    // --- 選擇候選，再確認（兩個步驟，spec §10.7）------------------------
+    window.pickCandidate = function (button) {
+      const chosen = button.closest(".candidate");
+      const list = chosen.closest(".cand-list");
+      for (const candidate of list.querySelectorAll(".candidate")) {
+        candidate.classList.toggle("is-selected", candidate === chosen);
+      }
+      const go = chosen.closest(".cands").querySelector(".confirm-bar__go");
+      if (go) go.disabled = false;
+    };
+
+    window.confirmSelected = function (button) {
+      const focus = button.closest(".focus");
+      const selected = focus.querySelector(".candidate.is-selected");
+      if (!selected) return;
+      confirmRow(focus.dataset.row, Number(selected.dataset.apparel));
+    };
+
+    window.confirmManual = function (button) {
+      const focus = button.closest(".focus");
+      const value = button.parentElement.querySelector(".manual__input").value.trim();
+      if (!value) return;
+      confirmRow(focus.dataset.row, Number(value));
+    };
+
+    async function confirmRow(rowId, apparelId) {
+      const done = await post(
+        "/api/mapping/confirm",
+        asJson({ mapping_candidate_id: Number(rowId), apparel_id: apparelId })
+      );
+      if (done) reloadWithToast("已確認對應");
+    }
+
+    // --- 重試取候選：只對這一張再打一次 --------------------------------
+    window.retryCandidates = async function (button) {
+      const focus = button.closest(".focus");
+      button.disabled = true;
+      const done = await post("/api/mapping/candidates/" + focus.dataset.row, { method: "POST" });
+      button.disabled = false;
+      if (done) reloadWithToast("已重新取得候選");
+    };
+
+    window.refetchImage = async function (button) {
+      const done = await post("/api/cards/" + button.dataset.apparel + "/image", { method: "POST" });
+      if (done) reloadWithToast("已補上卡圖");
+    };
+
+    // --- 跳過：純前端，不改動任何領域狀態（spec §10.4）----------------
+    window.skipFocus = function (button) {
+      const focus = button.closest(".focus");
+      const workspace = focus.parentElement;
+      focus.hidden = true;
+      workspace.appendChild(focus);
+      const next = workspace.querySelector(".focus:not([hidden])") || workspace.querySelector(".focus");
+      if (next && next !== focus) {
+        next.hidden = false;
+      } else {
+        focus.hidden = false; // 只剩這一張，繞回它自己
+      }
+      position = total ? (position % total) + 1 : 1;
+      const shown = currentFocus();
+      if (shown) shown.querySelector(".focus__index").textContent = position;
+    };
+
+    // --- 不納入行情／推翻對應：<dialog> 說清楚效果 ---------------------
+    let pendingAction = null;
+
+    function openDialog(title, body, note, action) {
+      document.getElementById("act-title").textContent = title;
+      document.getElementById("act-body").textContent = body;
+      document.getElementById("act-note").textContent = note;
+      pendingAction = action;
+      if (typeof dialog.showModal === "function") dialog.showModal();
+      else pendingAction && pendingAction();
+    }
+
+    window.closeActDialog = function () {
+      pendingAction = null;
+      if (dialog.open) dialog.close();
+    };
+
+    document.getElementById("act-go").addEventListener("click", () => {
+      const action = pendingAction;
+      window.closeActDialog();
+      if (action) action();
+    });
+
+    window.openExclude = function (button) {
+      const focus = button.closest(".focus");
+      openDialog(
+        "不納入行情",
+        "這個卡種將不建立 SNKRDUNK 行情對應，之後不再出現在待處理清單。",
+        "既有的持有品不會被刪除。",
+        () => excludeRow(focus.dataset.row)
+      );
+    };
+
+    async function excludeRow(rowId) {
+      const done = await post(
+        "/api/mapping/reject",
+        asJson({ mapping_candidate_id: Number(rowId) })
+      );
+      if (done) reloadWithToast("已標記為不納入行情");
+    }
+
+    window.openUndo = function (button) {
+      const row = button.closest(".rel");
+      openDialog(
+        "推翻對應",
+        "這個卡種會回到待處理，行情資訊在重新對應之前不可得。",
+        "既有的持有品不受影響。",
+        () => undoRow(row.dataset.kindRow)
+      );
+    };
+
+    async function undoRow(kindRowId) {
+      const done = await post("/api/mapping/confirm/" + kindRowId, { method: "DELETE" });
+      if (done) reloadWithToast("對應已推翻，卡種回到待處理");
+    }
+
+    // --- 歷史的即時篩選（spec §10.11）--------------------------------
+    window.filterHistory = function (query) {
+      const needle = query.trim().toLowerCase();
+      for (const item of document.querySelectorAll(".history .rel")) {
+        const haystack = item.dataset.search || item.textContent.toLowerCase();
+        item.hidden = needle !== "" && !haystack.includes(needle);
+      }
+    };
+  })();
 </script>
 </body>
 </html>
