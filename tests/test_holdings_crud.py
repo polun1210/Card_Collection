@@ -556,6 +556,55 @@ def test_新增持有品挑得到尚未確認的卡種(client):
     assert "Rayquaza ex（M2b #12）" in page
 
 
+def test_新增持有品可以在對話框裡當場新建卡種(client):
+    page = _page(client)
+
+    # spec §9.7：卡種不在清單裡時，使用者可以當場新建卡種並直接完成這一筆，
+    # 不強迫先做完 SNKRDUNK 對應。契約是 openCreate() 的卡種下拉多一個
+    # 「＋ 新增卡種…」選項，選了才展開系列／卡號／卡名三個欄位。舊版
+    # （8547bfe）的 openCreate 只有 kindSelect(null)，這些標記都不存在。
+    assert "＋ 新增卡種…" in page
+    assert 'id="new-kind-fields"' in page
+    assert 'id="f-new-series"' in page
+
+
+def test_持有品頁帶著即時篩選的欄位與可篩字串(client):
+    page = _page(client)
+
+    # spec §9.2：打字即篩選卡名、系列代碼、卡號，無送出按鈕、無篩選面板。
+    # 過濾邏輯是前端腳本、測不到；但契約測得到——篩選欄位存在，且每個卡種
+    # 區塊帶著把三個欄位串起來的可篩字串。舊版沒有搜尋欄、沒有 data-search。
+    assert 'id="holdings-search"' in page
+    assert 'data-search="' in page
+    # MEGA Lucario（M2a #228）這一組：卡名、系列代碼、卡號三者都在可篩字串裡。
+    assert 'data-search="mega lucario m2a 228"' in page
+
+
+def test_持有品頁備妥無結果時的提示(client):
+    page = _page(client)
+
+    # spec §9.2：找不到時給一句話。這句是預先渲染、由腳本切換顯示，所以在 HTML 裡。
+    # 舊版沒有搜尋，也就沒有這句。
+    assert "找不到符合項目的持有品" in page
+
+
+def test_已售出的刪除確認帶出售出日與售出價(client, add_holding):
+    holding_id = add_holding(
+        _kind_id(client, LUCARIO), cost_twd=2600, purchase_date="2026-03-15"
+    )
+    client.post(
+        f"/api/holdings/{holding_id}/sale",
+        json={"sold_price_twd": 4000, "sold_date": "2026-05-06"},
+    )
+
+    page = _page(client)
+    # spec §9.8：已售出的刪除確認要另外列出售出日、售出價，以及刪掉後會消失多少
+    # 已實現損益。確認訊息在腳本裡組出來，斷言那幾個模板片段有服務出去。舊版
+    # （8547bfe）的 sold 分支只有「刪除後已實現損益會減少 …」，沒有售出日與售出價。
+    assert "${lot.sold} 售出 ${money(lot.price)}" in page
+    assert "已實現損益會少掉 ${money(lot.realized)}" in page
+
+
 def test_手機上仍讀得到持有品頁(client):
     page = _page(client)
 
