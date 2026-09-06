@@ -178,30 +178,31 @@ def test_合計附上它涵蓋了幾張持有品(client, confirm_card, crawl):
 # --- 畫面 ---------------------------------------------------------------
 
 
-def test_持有品頁面同時顯示成本市值與未實現損益(client, confirm_card, crawl):
+def test_持有品頁面不重複首頁的彙總數字(client, confirm_card, crawl):
+    # 意圖反轉（原本是兩條「頁面顯示彙總市值」與「頁面標出還有 N 張沒有市值」）：
+    # 舊版持有品頁頂端有一個全頁的「持有中總市值」，會被讀成涵蓋全部 89 張，
+    # 所以旁邊必須聲明「還有 N 張沒有市值」當護欄。新版把儀表板還給首頁
+    # （uiux-spec §9.1「It does not repeat the homepage Portfolio dashboard」），
+    # 缺市值的揭露下放到每個卡種組自己的 `—`（§9.3「show —, not zero, and keep
+    # the group visible」）。會說謊的彙總數字不存在了，那句聲明也就沒有保護對象。
+    # 原「還有 N 張沒有市值」測試守的是同一個風險，已併入本條，不另外留空位。
+
     # Arrange
     _crawled(client, confirm_card, crawl)
 
     # Act
     page = client.get("/holdings")
 
-    # Assert
+    # Assert：首頁的彙總數字不在這一頁重複
     assert page.status_code == 200
-    assert "持有中總市值" in page.text
+    assert "持有中總市值" not in page.text
+    assert f"{HELD_MARKET_VALUE:,}" not in page.text
+    assert f"{UNREALIZED_PNL:+,}" not in page.text
+    assert "沒有市值" not in page.text
+
+    # 但移除的只是「全頁彙總」，不是這頁的損益資訊——每個卡種組仍有自己的
+    # 未實現損益（§9.3 的 aggregate unrealized P&L）。
     assert "未實現損益" in page.text
-    assert f"{HELD_MARKET_VALUE:,}" in page.text
-    assert f"{UNREALIZED_PNL:+,}" in page.text
-
-
-def test_持有品頁面標出還有幾張沒有市值(client, confirm_card, crawl):
-    # Arrange
-    _crawled(client, confirm_card, crawl)
-
-    # Act
-    page = client.get("/holdings")
-
-    # Assert
-    assert f"還有 {HELD_COUNT - VALUED_COUNT} 張沒有市值" in page.text
 
 
 def test_持有品頁面標出市值的樣本期間(client, confirm_card, crawl):
