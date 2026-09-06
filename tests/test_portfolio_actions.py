@@ -1,14 +1,35 @@
-"""首頁的持有品增刪改入口（承接 #10 的操作，只換位置）。
+"""首頁的增刪改入口與卡片明細抽屜的唯讀性。
 
-操作靠近它們要動的那筆資料：售出、編輯、刪除在**卡片的展開區**裡，一格一個卡種，
-展開後逐張列出。新增持有品在**頁面層級的工具列**，不再每列一份——重複的按鈕會把
-畫面塞滿，而「新增」本來就不屬於任何一張既有的持有品。
+#33 之後首頁明細**唯讀**（spec §8.3／§8.4）：點卡圖開一個抽屜，裡面只讀不寫。
+售出、編輯、刪除、改回持有中屬於持有品頁（#34），首頁的卡圖牆不再有這些逐筆入口。
+唯一留在首頁的增刪改動作是頁首的 `＋ 新增持有品`（`openCreate`，住在
+`_holding_editor.html`）——它不屬於任何一張既有持有品，所以不在移除之列。
 
-既有的持有品 API 完全沒動，本檔只驗證入口的位置與資料是否到得了前端；API 本身的
-行為由 test_holdings_crud.py 守著。
+抽屜內容由每格一個隱藏 `<template class="cell__detail">` server-render，點擊時
+clone 進抽屜。內容仍在 HTML 原始碼裡，所以字串斷言驗得到（見 `_portfolio_wall.html`）。
+
+既有的持有品 API 完全沒動；API 本身的行為由 test_holdings_crud.py 守著。
 """
 
 from conftest import LUCARIO, PRINTING_ERROR
+
+
+def _drawer_of(html: str, card: tuple, scope: str = "held") -> str:
+    """某個卡種在 `wall-{scope}` 那一格的 `<template class="cell__detail">` 內容。
+
+    卡種身分含卡名（ADR-0008）：系列＋卡號不唯一（錯體版與正常版同系列同號），
+    同名也可能有多個卡種（同一隻寶可夢出現在多個系列）。所以要同時比對
+    `data-code`（系列 #卡號）與 `data-name`（卡名）。
+    """
+    series, number, name = card[:3]
+    region = html[html.index(f'id="wall-{scope}"') : html.index('id="card-drawer"')]
+    if scope == "held":
+        region = region[: region.index('id="wall-sold"')]
+    for chunk in region.split('<div class="cell tile">')[1:]:
+        if f'data-name="{name}"' in chunk and f'data-code="{series} #{number}"' in chunk:
+            opened = chunk.index('<template class="cell__detail">')
+            return chunk[opened : chunk.index("</template>", opened)]
+    raise AssertionError(f"wall-{scope} 裡找不到 {name}（{series} #{number}）的格子")
 
 NEW_KIND = {
     "series_raw": "M2b",
@@ -73,98 +94,112 @@ def test_新增持有品挑得到尚未確認的卡種(client):
     assert "Rayquaza ex（M2b #12）" in page
 
 
-# --- 售出、編輯、刪除在展開區 -------------------------------------------
+# --- 首頁的明細唯讀 ---------------------------------------------------
 
 
-def test_持有中的每一格展開後有售出編輯與刪除(client):
+def test_首頁的卡圖牆沒有逐張售出編輯刪除入口(client):
     # Act
     page = _page(client)
 
-    # Assert：操作就在那一筆旁邊，因此不必先在別的地方查出 id
-    assert 'onclick="openSale(this)"' in page
-    assert 'onclick="openEdit(this)"' in page
-    assert 'onclick="openDelete(this)"' in page
+    # Assert：這四個逐筆入口不再出現在首頁（它們屬於持有品頁 #34）
+    for entry in ("openSale", "openEdit", "openDelete", "openUnsell"):
+        assert f'onclick="{entry}(' not in page
+    # 陪站崗的 in：卡圖牆確實渲染了（否則「沒有入口」是空的真），且唯一該留的
+    # 主動作——頁首的 ＋ 新增持有品——還在
+    assert 'id="wall-held"' in page
+    assert 'id="wall-sold"' in page
+    assert 'onclick="openCreate()"' in page
 
 
-def test_已售出的每一格是改回持有中而不是售出(client):
+def test_已售出的明細也不提供改回持有中(client):
+    # Act
+    drawer = _drawer_of(_page(client), ("S12a", "183", "Mew"), scope="sold")
+
+    # Assert：已售出明細講的是收藏史，不是可改的狀態
+    assert "onclick=" not in drawer
+    assert "openUnsell" not in drawer
+    # 陪站崗：抽屜確實有內容——售出紀錄那一段在
+    assert "售出紀錄" in drawer
+
+
+def test_首頁唯一的增刪改入口是頁首的新增持有品(client):
     # Act
     page = _page(client)
 
-    # Assert：已經賣掉的那張沒有「再賣一次」這種操作
-    assert 'onclick="openUnsell(this)"' in page
+    # Assert：openCreate 恰好一次（頁首），其餘四個逐筆動作一次都沒有
+    assert page.count('onclick="openCreate()"') == 1
+    for entry in ("openSale", "openEdit", "openDelete", "openUnsell"):
+        assert f'onclick="{entry}' not in page
 
 
-def test_五個增刪改操作在首頁全部到齊(client):
+def test_卡圖牆不用表格排版(client):
     # Act
     page = _page(client)
 
-    # Assert：新增、售出、編輯、改回持有中、刪除
-    for entry in ("openCreate", "openSale", "openEdit", "openUnsell", "openDelete"):
-        assert f"{entry}(" in page
-
-
-def test_操作入口不再散在唯讀表格的每一列(client):
-    # Act
-    page = _page(client)
-
-    # Assert：卡圖牆不用表格排版，操作也就不再是「表格的一欄」
+    # Assert：卡圖牆用 grid 換行、不用 <table>（interface.md §5 第 10 條）
     assert "<table" not in page
+    assert 'id="wall-held"' in page  # 陪站崗：牆確實渲染了
 
 
-# --- 動到哪一筆說得出來 -------------------------------------------------
+# --- 抽屜唯讀，但看得到哪一筆是哪一筆 ---------------------------------
 
 
-def test_刪除前的確認需要的那一筆資料就在畫面上(client):
+def test_持有中抽屜以唯讀方式顯示逐張購入日與成本(client):
     # Arrange
     _add_holding(client, LUCARIO, cost_twd=2600, purchase_date="2026-03-15")
 
     # Act
-    page = _page(client)
+    drawer = _drawer_of(_page(client), LUCARIO)
 
-    # Assert：確認訊息要說得出是**具體哪一筆**，避免手滑刪掉買入紀錄
-    assert 'data-purchase="2026-03-15"' in page
-    assert 'data-cost="2600"' in page
-    assert 'data-kind="MEGA Lucario（M2a #228）"' in page
+    # Assert：那一筆的購入日與成本看得到（spec §8.3「我的持有明細」唯讀）
+    assert "2026-03-15" in drawer
+    assert "2,600" in drawer
+    # 陪站崗的 not-in：確實唯讀——沒有 onclick、沒有掛給對話框的 data 屬性
+    assert "onclick=" not in drawer
+    assert "data-cost=" not in drawer
 
 
-def test_已售出的那一筆帶著已實現損益供確認訊息使用(client):
+def test_已售出抽屜逐筆顯示購入到售出的生命週期(client):
     # Arrange
-    holding_id = _add_holding(client, LUCARIO, cost_twd=2600)
+    holding_id = _add_holding(client, LUCARIO, cost_twd=2600, purchase_date="2026-03-15")
     client.post(f"/api/holdings/{holding_id}/sale", json={"sold_price_twd": 4000})
 
-    # Act
-    page = _page(client)
+    # Act：LUCARIO 現在有一筆已售出，落在 wall-sold
+    drawer = _drawer_of(_page(client), LUCARIO, scope="sold")
 
-    # Assert：刪掉一筆已售出的會動到已實現損益，確認時必須說得出會少多少
-    assert 'data-realized="1400"' in page
+    # Assert：購入資訊 → 售出資訊 的完整生命週期，逐筆帶已實現損益（4000 − 2600）
+    assert "2026-03-15" in drawer
+    assert "4,000" in drawer
+    assert "+1,400" in drawer
 
 
-def test_每一張持有品各自帶著自己的入口(client):
+def test_持有中抽屜逐張列出同卡種的每一筆(client):
     # Arrange：同一個卡種買了兩張，成本不同
-    first = _add_holding(client, PRINTING_ERROR, cost_twd=2600)
-    second = _add_holding(client, PRINTING_ERROR, cost_twd=3100)
+    _add_holding(client, PRINTING_ERROR, cost_twd=2600)
+    _add_holding(client, PRINTING_ERROR, cost_twd=3100)
 
+    # Act
+    drawer = _drawer_of(_page(client), PRINTING_ERROR)
+
+    # Assert：兩筆各自看得到（ADR-0009：賣哪一張由人在持有品頁指定，這裡先確保
+    # 逐張可見，不被聚合成一個總數）
+    assert "2,600" in drawer
+    assert "3,100" in drawer
+
+
+# --- 頁首新增持有品的對話框 -------------------------------------------
+
+
+def test_首頁載得到新增持有品的對話框(client):
     # Act
     page = _page(client)
 
-    # Assert：一格是一個卡種，但賣掉的是其中**某一張**（ADR-0009），系統不自動挑
-    assert f'data-id="{first}"' in page
-    assert f'data-id="{second}"' in page
-
-
-# --- 完成與失敗 ---------------------------------------------------------
-
-
-def test_首頁載得到操作用的對話框(client):
-    # Act
-    page = _page(client)
-
-    # Assert：刪除前有明確確認，靠的就是這個對話框
+    # Assert：頁首的 ＋ 新增持有品（openCreate）用的就是這個對話框
     assert 'id="editor"' in page
-    assert "確定刪除" in page
+    assert 'onclick="openCreate()"' in page
 
 
-def test_操作完成後畫面自動反映新狀態(client):
+def test_新增完成後畫面自動反映新狀態(client):
     # Act
     page = _page(client)
 

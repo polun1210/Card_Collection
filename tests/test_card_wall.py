@@ -259,11 +259,11 @@ def test_首頁的每一格顯示卡名與漲跌幅(client, confirm_card, crawl)
     assert f"{rate:+.1%}" in html
 
 
-def test_首頁展開後看得到逐張成本與市值(client, confirm_card, crawl):
+def test_抽屜看得到逐張成本與市值(client, confirm_card, crawl):
     # Arrange
     _crawled(client, confirm_card, crawl)
 
-    # Act
+    # Act：抽屜內容由每格的 <template> server-render，仍在 HTML 原始碼裡
     html = client.get("/").text
 
     # Assert
@@ -358,9 +358,10 @@ def test_算不出報酬率的卡種在格子上顯示破折號(client, confirm_
     # Act
     html = client.get("/").text
 
-    # Assert：spec §7.7——0.0% 會被讀成「不賺不賠」，缺報酬率就給 `—`
+    # Assert：spec §7.7——0.0% 會被讀成「不賺不賠」，缺報酬率就給 `—`。
+    # （「尚無市值」這句在抽屜的市場區是正確的說法，只是不該出現在收合格的報酬率位。）
     assert '<span class="rate unvalued">—</span>' in html
-    assert "尚無市值" not in html
+    assert '<span class="rate unvalued">0.0%' not in html
 
 
 def test_卡圖用實體卡比例且不裁切(client):

@@ -1,11 +1,22 @@
-{# 收藏總覽的卡圖牆：一格一個卡種，外加卡片展開時才取動能的腳本。
+{# 收藏總覽的卡圖牆＋卡片明細抽屜。
 
-   #32（卡圖牆改版）：收合格（`<summary>`）改成卡圖優先——實體卡 63/88 比例、
-   桌機約六欄手機兩欄、一般狀態不佔框（hover／focus 才由共用 .tile 浮出）、文字
-   分頁。展開區（`<dl>`、`.lots`、五顆增刪改按鈕、頁尾動能腳本）#32 不動，由 #33
-   連同抽屜整包換掉。
+   #33（卡片明細抽屜）：點卡圖不再原地展開、不再讓牆面重排。桌機從右側浮出
+   <dialog class="drawer">（design.css 的 .drawer 骨架，約 460px、覆蓋在牆上），
+   手機是全螢幕明細（.drawer 的 media query）＋返回式操作。
 
-   需要的 context：`wall`、`liquidity`。分頁用 radio ＋ :checked，不等腳本。 #}
+   抽屜內容由**每格一個隱藏 <template>** server-render，點擊時 clone 進抽屜。
+   位元組與 #32 之前的 <dl>/.lots 持平——不是新增負擔。而且 <template> 的內容
+   仍在 HTML 原始碼裡，所以 TestClient 的字串斷言照樣驗得到抽屜，改用腳本沒有
+   失去測試接縫。
+
+   只有**動能**是打開明細那一刻才取（頁尾腳本 fillMomentum）：牆上六十幾格不為了
+   實際會看的一兩格全部先算一次（interface.md §8）。市值、成本、損益本來就在
+   /api/portfolio 回應裡，clone 進來即可，不重取。
+
+   明細**唯讀**——售出／編輯／刪除屬於持有品頁（#34）。首頁頁首的 ＋ 新增持有品
+   （openCreate，住在 _holding_editor.html）不受影響。
+
+   需要的 context：`wall`、`liquidity`。分頁仍用 radio ＋ :checked，不依賴腳本。 #}
 
   {# 卡圖牆：一格一個卡種，用認圖的方式找卡，而不是讀字。同一個卡種可以同時出現在
      兩個分頁——賣掉兩張、還持有三張是正常狀態。 #}
@@ -19,8 +30,12 @@
 
     <div class="grid" id="wall-held">
       {% for cell in wall.held %}
-      <details class="cell tile">
-        <summary>
+      <div class="cell tile">
+        <button type="button" class="cell__open"
+                data-apparel="{{ cell.apparel_id or '' }}"
+                data-name="{{ cell.card_name_raw }}"
+                data-code="{{ cell.series_raw }} #{{ cell.number_raw }}"
+                aria-haspopup="dialog" aria-controls="card-drawer">
           {% if cell.apparel_id %}
           <img class="art" src="/api/cards/{{ cell.apparel_id }}/image" alt="" loading="lazy">
           {% else %}
@@ -34,75 +49,100 @@
           {# 算不出報酬率就給破折號——0.0% 會被讀成「不賺不賠」（spec §7.7）。 #}
           <span class="rate unvalued">—</span>
           {% endif %}
-        </summary>
-        <dl>
-          <dt>成本</dt>
-          <dd>{{ "{:,}".format(cell.held_cost_twd) }}</dd>
-          <dt>市值</dt>
-          <dd>
-            {% if cell.market_value %}
-              {{ "{:,}".format(cell.market_value.market_value_twd) }}{% if cell.held_count > 1 %}／張，共 {{ "{:,}".format(cell.held_market_value_twd) }}{% endif %}
-              <span class="sample">{{ cell.market_value.sample_count }} 筆成交／{{ cell.market_value.sample_from }}～{{ cell.market_value.sample_to }}</span>
-              {% if cell.market_value.stale_days %}
-              <span class="expired">已過期 {{ cell.market_value.stale_days }} 天</span>
-              {% endif %}
-            {% else %}
-              尚未算得出（還沒對應到 SNKRDUNK，或還沒抓到成交紀錄）
-            {% endif %}
-          </dd>
-          {% if cell.unrealized_pnl_twd is defined %}
-          <dt>未實現損益</dt>
-          <dd class="{{ 'rate up' if cell.unrealized_pnl_twd > 0 else 'rate down' if cell.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(cell.unrealized_pnl_twd) }}</dd>
+        </button>
+        {# 持有中的明細（spec §8.3）：身分與卡圖 → 我的持有 → 市場 → 我的持有明細
+           → 前往持有品。市值與樣本形狀永遠相鄰；流動性兩個半邊永遠並列。 #}
+        <template class="cell__detail">
+          {% if cell.apparel_id %}
+          <img class="drawer__art" src="/api/cards/{{ cell.apparel_id }}/image" alt="">
+          {% else %}
+          <div class="drawer__art drawer__art--empty"></div>
           {% endif %}
-          {# 動能在**展開的那一刻**才取（見頁尾的腳本）。列表回應不背負它——牆上有
-             六十八格，為了一格看得到的數字讓另外六十七格都算一次並不划算。 #}
-          <dt>動能</dt>
-          <dd class="momentum"{% if cell.apparel_id %} data-apparel="{{ cell.apparel_id }}"{% endif %}>
-            <span class="soon">資料累積中</span>
-            <span class="why">{% if cell.apparel_id %}展開後向伺服器取近 30 天與前 30 天的成交價中位數。{% else %}尚未對應到 SNKRDUNK，沒有成交紀錄可以比較。{% endif %}</span>
-          </dd>
-          <dt>流動性</dt>
-          <dd>
-            <span class="soon">敬請期待</span>
-            <span class="why">{{ liquidity.reason }}</span>
-          </dd>
-          {# 一格是一個卡種，但成本是一張一張付的，賣的也是其中某一張（ADR-0009）。
-             操作因此逐張各自一份，靠近它要動的那筆資料。 #}
-          <dt>每一張</dt>
-          <dd>
-            <ul class="lots">
-              {% for lot in cell.holdings %}
-              <li data-id="{{ lot.id }}"
-                  data-kind-id="{{ lot.mapping_candidate_id }}"
-                  data-kind="{{ cell.card_name_raw }}（{{ cell.series_raw }} #{{ cell.number_raw }}）"
-                  data-purchase="{{ lot.purchase_date }}"
-                  data-cost="{{ lot.cost_twd }}"
-                  data-status="{{ lot.status }}">
-                <span>{{ lot.purchase_date }} 購入 {{ "{:,}".format(lot.cost_twd) }}</span>
-                <span class="acts">
-                  <button class="link" onclick="openSale(this)">售出</button>
-                  <button class="link" onclick="openEdit(this)">編輯</button>
-                  <button class="link danger" onclick="openDelete(this)">刪除</button>
+
+          <section class="drawer__sec">
+            <h3>我的持有</h3>
+            {% if cell.market_value %}
+            <div class="drawer__row"><span class="drawer__label">合計現值</span><span class="drawer__value tnum">NT$ {{ "{:,}".format(cell.held_market_value_twd) }}</span></div>
+            {% endif %}
+            <div class="drawer__row"><span class="drawer__label">總成本</span><span class="drawer__value tnum">NT$ {{ "{:,}".format(cell.held_cost_twd) }}</span></div>
+            {% if cell.unrealized_pnl_twd is defined %}
+            <div class="drawer__row"><span class="drawer__label">未實現損益</span><span class="drawer__value tnum {{ 'dir-up' if cell.unrealized_pnl_twd > 0 else 'dir-down' if cell.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(cell.unrealized_pnl_twd) }}</span></div>
+            {% endif %}
+            {% if cell.return_rate is defined %}
+            <div class="drawer__row"><span class="drawer__label">報酬率</span><span class="drawer__value tnum {{ 'dir-up' if cell.return_rate > 0 else 'dir-down' if cell.return_rate < 0 else '' }}">{{ "{:+.1%}".format(cell.return_rate) }}</span></div>
+            {% endif %}
+            {% if not cell.market_value %}
+            <p class="status-pending">尚無市值，未實現損益與報酬率算不出</p>
+            {% endif %}
+          </section>
+
+          <section class="drawer__sec">
+            <h3>市場</h3>
+            <div class="drawer__row">
+              <span class="drawer__label">單張市值</span>
+              <span class="drawer__value">
+                {% if cell.market_value %}
+                <span class="tnum">NT$ {{ "{:,}".format(cell.market_value.market_value_twd) }}</span>
+                <span class="drawer__sample">{{ cell.market_value.sample_count }} 筆 · {{ cell.market_value.sample_from }}～{{ cell.market_value.sample_to }}</span>
+                {% if cell.market_value.stale_days %}
+                <span class="drawer__stale">已過期 {{ cell.market_value.stale_days }} 天</span>
+                {% endif %}
+                {% else %}
+                <span class="status-pending">尚無市值</span>
+                {% endif %}
+              </span>
+            </div>
+            {# 動能：佔位，開抽屜後 fillMomentum() 換掉。data-apparel 缺席＝沒對應到
+               SNKRDUNK，不打 API。 #}
+            <div class="drawer__row drawer__momentum"{% if cell.apparel_id %} data-apparel="{{ cell.apparel_id }}"{% endif %}>
+              <span class="drawer__label">動能</span>
+              <span class="drawer__value">
+                <span class="status-pending">資料累積中</span>
+                <span class="drawer__why">{% if cell.apparel_id %}打開明細後向伺服器取近 30 天與前 30 天的成交價中位數。{% else %}尚未對應到 SNKRDUNK，沒有成交紀錄可以比較。{% endif %}</span>
+              </span>
+            </div>
+            {# 流動性：兩個半邊永遠並列（CONTEXT.md）。它與動能不同——動能的來源存在、
+               逐日累積，流動性一筆都還沒在收，所以是「敬請期待」不是「資料累積中」。 #}
+            <div class="drawer__row">
+              <span class="drawer__label">流動性</span>
+              <span class="drawer__value">
+                <span class="drawer__liq-pair">
+                  <span><span class="drawer__liq-label">PSA 10 張數</span><span class="status-pending">敬請期待</span></span>
+                  <span><span class="drawer__liq-label">近 3 月成交</span><span class="status-pending">敬請期待</span></span>
                 </span>
-              </li>
+                <span class="drawer__why">{{ liquidity.reason }}</span>
+              </span>
+            </div>
+          </section>
+
+          <section class="drawer__sec">
+            <h3>我的持有明細</h3>
+            <ul class="drawer__lots">
+              {% for lot in cell.holdings %}
+              <li><span>{{ lot.purchase_date }}</span><span class="tnum">NT$ {{ "{:,}".format(lot.cost_twd) }}</span></li>
               {% endfor %}
             </ul>
-          </dd>
-        </dl>
-      </details>
+          </section>
+
+          <a class="drawer__link" href="/holdings">查看持有品明細 →</a>
+        </template>
+      </div>
       {% else %}
-      <p class="empty">還沒有持有中的持有品。上面工具列的「新增持有品」記第一筆。</p>
+      <p class="empty">還沒有持有中的持有品。頁首的「＋ 新增持有品」記第一筆。</p>
       {% endfor %}
     </div>
 
     {# 收合狀態只留身分與已實現報酬率（spec §7.8）。購入成本、售出日、已實現損益
-       這三個終局數字改由 #33 的抽屜（§8.4）承接，不再直接放在格子上——留一塊給人
-       猜比展開多一步更糟的那條理由，在抽屜裡不成立。展開區（`.lots` 的增刪改）
-       #32 不動，#33 換掉。 #}
+       這三個終局數字由抽屜（§8.4）承接。 #}
     <div class="grid" id="wall-sold">
       {% for cell in wall.sold %}
-      <details class="cell tile">
-        <summary>
+      {% set proceeds = cell.holdings | sum(attribute="sold_price_twd") %}
+      <div class="cell tile">
+        <button type="button" class="cell__open"
+                data-apparel="{{ cell.apparel_id or '' }}"
+                data-name="{{ cell.card_name_raw }}"
+                data-code="{{ cell.series_raw }} #{{ cell.number_raw }}"
+                aria-haspopup="dialog" aria-controls="card-drawer">
           {% if cell.apparel_id %}
           <img class="art" src="/api/cards/{{ cell.apparel_id }}/image" alt="" loading="lazy">
           {% else %}
@@ -110,83 +150,133 @@
           {% endif %}
           <span class="name">{{ cell.card_name_raw }}</span>
           {# 已售出無條件標明張數（spec §7.8 的 sold count 沒有 where applicable）。
-             移除 .fact 後這是格子上唯一能分辨持有中／已售出的線索。 #}
+             這是格子上唯一能分辨持有中／已售出的線索。 #}
           <span class="code">{{ cell.series_raw }} #{{ cell.number_raw }}・已售出 {{ cell.sold_count }} 張</span>
           <span class="rate {{ 'up' if cell.return_rate > 0 else 'down' if cell.return_rate < 0 else '' }}">{{ "{:+.1%}".format(cell.return_rate) }}</span>
-        </summary>
-        <ul class="lots">
-          {% for lot in cell.holdings %}
-          <li data-id="{{ lot.id }}"
-              data-kind-id="{{ lot.mapping_candidate_id }}"
-              data-kind="{{ cell.card_name_raw }}（{{ cell.series_raw }} #{{ cell.number_raw }}）"
-              data-purchase="{{ lot.purchase_date }}"
-              data-cost="{{ lot.cost_twd }}"
-              data-status="{{ lot.status }}"
-              data-sold="{{ lot.sold_date }}"
-              data-price="{{ lot.sold_price_twd }}"
-              data-realized="{{ lot.realized_pnl_twd }}">
-            <span>{{ lot.sold_date }} 售出 {{ "{:,}".format(lot.sold_price_twd) }}</span>
-            <span class="acts">
-              <button class="link" onclick="openUnsell(this)">改回持有中</button>
-              <button class="link" onclick="openEdit(this)">編輯</button>
-              <button class="link danger" onclick="openDelete(this)">刪除</button>
-            </span>
-          </li>
-          {% endfor %}
-        </ul>
-      </details>
+        </button>
+        {# 已售出的明細講的是收藏史，不是市場分析（spec §8.4）：不顯示現值、動能、
+           流動性。每一筆是「購入資訊 → 售出資訊」的完整生命週期，不拆成兩張表。 #}
+        <template class="cell__detail">
+          {% if cell.apparel_id %}
+          <img class="drawer__art" src="/api/cards/{{ cell.apparel_id }}/image" alt="">
+          {% else %}
+          <div class="drawer__art drawer__art--empty"></div>
+          {% endif %}
+
+          <section class="drawer__sec">
+            <h3>我的歷史</h3>
+            <div class="drawer__row"><span class="drawer__label">總成本</span><span class="drawer__value tnum">NT$ {{ "{:,}".format(cell.sold_cost_twd) }}</span></div>
+            <div class="drawer__row"><span class="drawer__label">總售出</span><span class="drawer__value tnum">NT$ {{ "{:,}".format(proceeds) }}</span></div>
+            <div class="drawer__row"><span class="drawer__label">已實現損益</span><span class="drawer__value tnum {{ 'dir-up' if cell.realized_pnl_twd > 0 else 'dir-down' if cell.realized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(cell.realized_pnl_twd) }}</span></div>
+            <div class="drawer__row"><span class="drawer__label">已實現報酬率</span><span class="drawer__value tnum {{ 'dir-up' if cell.return_rate > 0 else 'dir-down' if cell.return_rate < 0 else '' }}">{{ "{:+.1%}".format(cell.return_rate) }}</span></div>
+          </section>
+
+          <section class="drawer__sec">
+            <h3>售出紀錄</h3>
+            <ul class="drawer__lifecycle">
+              {% for lot in cell.holdings %}
+              <li>
+                <span class="drawer__buy">{{ lot.purchase_date }} 購入 NT$ {{ "{:,}".format(lot.cost_twd) }}</span>
+                <span class="drawer__arrow">→</span>
+                <span class="drawer__sell">{{ lot.sold_date }} 售出 NT$ {{ "{:,}".format(lot.sold_price_twd) }}</span>
+                <span class="drawer__lot-pnl tnum {{ 'dir-up' if lot.realized_pnl_twd > 0 else 'dir-down' if lot.realized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(lot.realized_pnl_twd) }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </section>
+
+          <a class="drawer__link" href="/holdings">查看持有品明細 →</a>
+        </template>
+      </div>
       {% else %}
       <p class="empty">還沒有已售出的持有品。</p>
       {% endfor %}
     </div>
+
+    {# 抽屜殼。<dialog> + showModal()：焦點鎖、Esc 關閉、::backdrop 當 scrim 都是
+       原生的。身分列 sticky（spec §8.2）；手機的關閉鍵是返回箭頭（spec §11.4）。 #}
+    <dialog class="drawer" id="card-drawer" aria-labelledby="card-drawer-name">
+      <header class="drawer__id">
+        <button type="button" class="drawer__dismiss" aria-label="關閉明細" onclick="closeCardDrawer()"></button>
+        <span class="drawer__id-text">
+          <strong id="card-drawer-name"></strong>
+          <span id="card-drawer-code"></span>
+        </span>
+      </header>
+      <div class="drawer__body" id="card-drawer-body"></div>
+    </dialog>
   </section>
 
 <script>
-  {# 動能：展開卡片時才向既有的卡種持有品端點取，取回來就留著，反覆開合不重打。
-
-     為什麼不隨頁面一起算：牆上有六十八格，一次算完等於為了使用者實際會看的那
-     一兩格，把另外六十六格的兩個中位數也算了。 #}
+  {# 點卡圖 → clone 該格的 <template> 進抽屜 → showModal()。牆面不重排。
+     只有動能在這一刻才取，且以 apparel id 為鍵快取，反覆開合不重打。 #}
   (function () {
-    const loaded = new WeakSet();
+    const drawer = document.getElementById("card-drawer");
+    const body = document.getElementById("card-drawer-body");
+    const nameEl = document.getElementById("card-drawer-name");
+    const codeEl = document.getElementById("card-drawer-code");
+    const momentumCache = new Map();
 
-    function render(box, momentum) {
+    function openDrawer(button) {
+      const detail = button.parentElement.querySelector("template.cell__detail");
+      nameEl.textContent = button.dataset.name;
+      codeEl.textContent = button.dataset.code;
+      body.replaceChildren(detail.content.cloneNode(true));
+      body.scrollTop = 0;
+      drawer.showModal();
+      const box = body.querySelector(".drawer__momentum[data-apparel]");
+      if (box) fillMomentum(box);
+    }
+
+    window.closeCardDrawer = function () {
+      drawer.close();
+    };
+
+    async function fillMomentum(box) {
+      const slot = box.querySelector(".drawer__value");
+      const apparel = box.dataset.apparel;
+      if (momentumCache.has(apparel)) {
+        renderMomentum(slot, momentumCache.get(apparel));
+        return;
+      }
+      try {
+        const response = await fetch("/api/cards/" + apparel + "/holdings");
+        if (!response.ok) throw new Error(response.status);
+        const momentum = (await response.json()).momentum;
+        momentumCache.set(apparel, momentum);
+        renderMomentum(slot, momentum);
+      } catch (error) {
+        // 取不到就說取不到，不留「資料累積中」冒充一個已知的空狀態——那兩件事
+        // 完全不同。關掉重開會重試。
+        slot.innerHTML = '<span class="drawer__why">動能取不到（'
+          + escapeHtml(error) + "）。關掉重開可以重試。</span>";
+      }
+    }
+
+    function renderMomentum(slot, momentum) {
       if (!momentum.available) {
-        // 空狀態與可用狀態長得一樣講究——它不是壞掉的畫面。理由由伺服器給，
-        // 前端不自己編一句「暫無資料」。
-        box.innerHTML = '<span class="soon">資料累積中</span>'
-          + '<span class="why">' + escapeHtml(momentum.reason) + "</span>";
+        // 空狀態與可用狀態一樣講究——它不是壞掉的畫面。理由由伺服器給。
+        slot.innerHTML = '<span class="status-pending">資料累積中</span>'
+          + '<span class="drawer__why">' + escapeHtml(momentum.reason) + "</span>";
         return;
       }
       const rate = momentum.return_rate;
-      const direction = rate > 0 ? "up" : rate < 0 ? "down" : "";
+      const direction = rate > 0 ? "dir-up" : rate < 0 ? "dir-down" : "";
       // 正負號與版面上其他報酬率同一種寫法（Python 的 {:+.1%}），不另立一套。
-      box.innerHTML = '<span class="rate ' + direction + '">'
+      slot.innerHTML = '<span class="tnum ' + direction + '">'
         + (rate >= 0 ? "+" : "") + (rate * 100).toFixed(1) + "%</span>"
         // 樣本形狀與市值旁的筆數同一個道理：兩筆撐起來的 −25% 與二十筆撐起來的
         // −25%，不該長得一模一樣。
-        + '<span class="why">近 30 天 ' + momentum.recent_count
+        + '<span class="drawer__why">近 30 天 ' + momentum.recent_count
         + " 筆成交／前 30 天 " + momentum.previous_count + " 筆</span>";
     }
 
-    async function load(cell) {
-      const box = cell.querySelector(".momentum[data-apparel]");
-      if (!box || loaded.has(box)) return;
-      loaded.add(box);
-      try {
-        const response = await fetch("/api/cards/" + box.dataset.apparel + "/holdings");
-        if (!response.ok) throw new Error(response.status);
-        render(box, (await response.json()).momentum);
-      } catch (error) {
-        // 取不到就說取不到，不留著「資料累積中」冒充一個已知的空狀態——那兩件
-        // 事完全不同。收合再展開會重試。
-        loaded.delete(box);
-        box.innerHTML = '<span class="why">動能取不到（' + escapeHtml(error)
-          + "）。收合再展開可以重試。</span>";
-      }
+    for (const button of document.querySelectorAll(".wall .cell__open")) {
+      button.addEventListener("click", () => openDrawer(button));
     }
-
-    for (const cell of document.querySelectorAll(".wall details.cell")) {
-      cell.addEventListener("toggle", () => { if (cell.open) load(cell); });
-    }
+    // showModal() 原生只認 Esc；點 ::backdrop（即 dialog 本身的空白）也關掉。
+    drawer.addEventListener("click", (event) => {
+      if (event.target === drawer) drawer.close();
+    });
   })();
 </script>
