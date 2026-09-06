@@ -128,6 +128,56 @@ def test_佇列頁顯示候選卡圖(client):
     assert "メガルカリオ" in html
 
 
+def test_點選候選只選取需再按確認才寫入(client):
+    # Act
+    html = client.get("/queue").text
+
+    # Assert：點候選走 pickCandidate（只選取），寫入要另按「確認對應」（spec §10.7）
+    assert "pickCandidate(this)" in html
+    assert "確認對應" in html
+    assert 'onclick="confirmSelected(this)"' in html
+    # 「確認對應」一開始是停用的——沒選候選就不能確認
+    assert "confirm-bar__go" in html and "disabled" in html
+
+
+def test_搜尋成功零候選與來源失敗在畫面上長得不一樣(client):
+    # Arrange：CP2 002 的錄下回應是真實的「查無結果」——搜尋成功、零筆
+    reshiram = _find(client, "CP2", "2", "Reshiram")
+    assert (
+        client.post(f"/api/mapping/candidates/{reshiram['id']}").json()["candidates"]
+        == []
+    )
+
+    # Act
+    html = client.get("/queue").text
+
+    # Assert：搜尋成功但沒人賣 → 中性的「沒有找到候選」，不是來源失敗那個說法
+    assert "沒有找到候選" in html
+    assert "status-pending cands__state" in html  # 中性狀態樣式
+    # 而且畫面上沒有來源失敗的說法與重試入口
+    assert "無法取得 SNKRDUNK 候選" not in html
+    assert "cands__error" not in html
+
+
+def test_來源掛掉時卡種對應頁仍然渲染得出來(client, snkrdunk):
+    # Arrange：候選抓取整個掛掉（連線中斷）
+    snkrdunk.raise_network_error = True
+
+    # Act
+    response = client.get("/queue")
+
+    # Assert：整頁不該 500——待處理清單與歷史都還讀得出來（這是真實發生過的當機）
+    assert response.status_code == 200, response.text
+    html = response.text
+    assert "卡種對應" in html
+    assert "已確認" in html  # 歷史區塊仍在
+    # 抓不到候選的那幾張明確說「無法取得」並提供重試，不冒充成「沒有找到候選」
+    assert "無法取得 SNKRDUNK 候選" in html
+    assert 'onclick="retryCandidates(this)"' in html  # 重試入口
+    assert "沒有找到候選" not in html
+    assert "cands__error" in html  # 用錯誤狀態的容器，不是中性的 status-pending
+
+
 def test_對不存在的列取候選回404(client):
     # Act
     response = client.post("/api/mapping/candidates/999999")
