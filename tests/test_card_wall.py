@@ -298,13 +298,20 @@ def test_首頁在近30天無成交時顯示過期天數(client_factory, confirm
     assert "已過期 41 天" in html
 
 
-def test_首頁的已售出不必展開就顯示成本與淨賺(client):
+def test_首頁的已售出收合格不再放終局數字只留已實現報酬率(client):
+    """意圖被 spec §7.8 蓄意反轉：收合狀態只留身分與已實現報酬率，購入成本、售出日、
+    已實現損益這三個終局數字改由 §8.4 的抽屜（#33）承接。
+
+    斷言跟著翻面而不是刪除——留住「有人不小心把終局數字加回格子」的護欄，只是方向
+    對調。`.fact` 是那三個數字在收合格上的唯一載體，整個類別退役即代表格子清乾淨了。
+    #33 會在已售出抽屜補上對應的正面斷言（總成本、總售出、已實現損益、已實現報酬率）。
+    """
     # Act
     html = client.get("/").text
 
-    # Assert
-    assert f"{PIKACHU_25TH_COST:,}" in html
-    assert f"{PIKACHU_25TH_REALIZED:+,}" in html
+    # Assert：終局數字不再直接放在格子上
+    assert 'class="fact"' not in html
+    # 已實現報酬率仍留在收合狀態（§7.8 的 Collapsed state 保留 realized return rate）
     assert f"{PIKACHU_25TH_REALIZED / PIKACHU_25TH_COST:+.1%}" in html
 
 
@@ -328,6 +335,54 @@ def test_卡圖牆的百分比不使用倍數(client, confirm_card, crawl):
 
     # Assert：全站唯一的報酬率定義是 (結果 − 成本) ÷ 成本
     assert "倍" not in html
+
+
+def test_已售出的格子一張也標明已售出(client):
+    """移除三個 `.fact` 之後售出日不再兜底，`已售出 N 張` 成為格子上唯一能分辨
+    持有中／已售出的線索。spec §7.8 的 sold count in metadata **沒有** where
+    applicable——對照 §7.7 held 的 holding count where applicable 是刻意的差別，
+    已售出那半無條件顯示，只售出一張也要寫「已售出 1 張」。
+    """
+    # Act：#wall-sold 之後才是已售出那半的 markup
+    sold = client.get("/").text.split('id="wall-sold"', 1)[1]
+
+    # Assert
+    assert "已售出 1 張" in sold
+    assert "已售出 2 張" in sold
+
+
+def test_算不出報酬率的卡種在格子上顯示破折號(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    html = client.get("/").text
+
+    # Assert：spec §7.7——0.0% 會被讀成「不賺不賠」，缺報酬率就給 `—`
+    assert '<span class="rate unvalued">—</span>' in html
+    assert "尚無市值" not in html
+
+
+def test_卡圖用實體卡比例且不裁切(client):
+    # Act
+    css = client.get("/static/portfolio.css").text
+    normalized = css.replace(" ", "")
+
+    # Assert：spec §7.6——實體卡 63mm×88mm，contain 保留完整卡緣，不再用過期的 10/7
+    assert "aspect-ratio:63/88" in normalized
+    assert "object-fit:contain" in normalized
+    assert "10/7" not in normalized
+
+
+def test_卡圖牆桌機自動填滿手機兩欄(client):
+    # Act
+    css = client.get("/static/portfolio.css").text
+    normalized = css.replace(" ", "").replace("\n", "")
+
+    # Assert：spec §7.5／§11.3——桌機欄數 auto-fill 隨寬度自己長，手機固定兩欄
+    assert "repeat(auto-fill,minmax(" in normalized
+    assert "max-width:767px" in normalized
+    assert "grid-template-columns:repeat(2,1fr)" in normalized
 
 
 def test_卡圖牆不靠橫向捲動排版(client, confirm_card, crawl):
