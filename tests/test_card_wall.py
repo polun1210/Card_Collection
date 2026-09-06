@@ -337,6 +337,20 @@ def test_卡圖牆的百分比不使用倍數(client, confirm_card, crawl):
     assert "倍" not in html
 
 
+def test_已售出的格子一張也標明已售出(client):
+    """移除三個 `.fact` 之後售出日不再兜底，`已售出 N 張` 成為格子上唯一能分辨
+    持有中／已售出的線索。spec §7.8 的 sold count in metadata **沒有** where
+    applicable——對照 §7.7 held 的 holding count where applicable 是刻意的差別，
+    已售出那半無條件顯示，只售出一張也要寫「已售出 1 張」。
+    """
+    # Act：#wall-sold 之後才是已售出那半的 markup
+    sold = client.get("/").text.split('id="wall-sold"', 1)[1]
+
+    # Assert
+    assert "已售出 1 張" in sold
+    assert "已售出 2 張" in sold
+
+
 def test_算不出報酬率的卡種在格子上顯示破折號(client, confirm_card, crawl):
     # Arrange
     _crawled(client, confirm_card, crawl)

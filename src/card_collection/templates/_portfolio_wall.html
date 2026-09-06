@@ -109,7 +109,9 @@
           <span class="art"></span>
           {% endif %}
           <span class="name">{{ cell.card_name_raw }}</span>
-          <span class="code">{{ cell.series_raw }} #{{ cell.number_raw }}{% if cell.sold_count > 1 %}・已售出 {{ cell.sold_count }} 張{% endif %}</span>
+          {# 已售出無條件標明張數（spec §7.8 的 sold count 沒有 where applicable）。
+             移除 .fact 後這是格子上唯一能分辨持有中／已售出的線索。 #}
+          <span class="code">{{ cell.series_raw }} #{{ cell.number_raw }}・已售出 {{ cell.sold_count }} 張</span>
           <span class="rate {{ 'up' if cell.return_rate > 0 else 'down' if cell.return_rate < 0 else '' }}">{{ "{:+.1%}".format(cell.return_rate) }}</span>
         </summary>
         <ul class="lots">
