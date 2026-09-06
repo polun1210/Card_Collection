@@ -245,6 +245,28 @@ def test_走勢圖下方沒有教學段落(client, confirm_card, crawl):
     assert '<p class="hint">' not in html
 
 
+def test_摘要在DOM裡排在走勢圖之前(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    hero = _hero(client.get("/").text)
+
+    # Assert：手機直向堆疊時最重要的數字不必先捲過一張圖（spec §11.2）。桌機靠
+    # CSS row-reverse 把摘要視覺上移到右側——所以 DOM 順序是這個行為的唯一依據，
+    # 換掉 row-reverse 又不調 DOM 的話手機會悄悄壞掉。
+    assert hero.index("持有中總市值") < hero.index("資產走勢")
+
+
+def test_還沒有走勢資料時不謊報卡種數(client):
+    # Act：還沒爬過任何成交紀錄，trend 是空的，卡種數沒有來源
+    hero = _hero(client.get("/").text)
+
+    # Assert：省略是誠實的，寫「0 卡種」不是——持有 89 張卻寫 0 卡種會被讀成
+    # 「我一個卡種都沒有」（同 §7.7 用破折號而不是 0.0% 的道理）
+    assert "0 卡種" not in hero
+
+
 def test_首頁顯示還有幾張缺市值(client, confirm_card, crawl):
     # Arrange
     _crawled(client, confirm_card, crawl)

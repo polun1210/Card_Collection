@@ -428,3 +428,18 @@ def test_沒有曲線可畫時說明在等什麼(client):
     # Assert：空白會被讀成「壞掉了」
     assert "資產走勢" in html
     assert "畫不出曲線" in html
+
+
+def test_走勢圖的線與量尺不帶漲跌語意(client):
+    # Act：透過 TestClient 取樣式表，不直接讀檔（#29 立下的先例）
+    css = client.get("/static/portfolio.css").text
+    rules = [
+        line for line in css.splitlines() if line.lstrip().startswith("#trend-chart")
+    ]
+
+    # Assert：防「空洞的真」——選擇器改名後這條會變成對空清單斷言，那比紅燈更糟
+    assert rules, "#trend-chart 的規則不見了，這條測試已經沒有在驗任何東西"
+
+    # 曲線講的是「總市值多少」不是「賺賠」，量尺講的是涵蓋率不是方向（spec §7.3）。
+    # 斷言語意色**不出現**，而不是等於某個中性 token，換別的中性色也不會假紅。
+    assert not [rule for rule in rules if "--positive" in rule or "--negative" in rule]

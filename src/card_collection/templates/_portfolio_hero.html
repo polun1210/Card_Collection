@@ -38,6 +38,14 @@
       <span class="figure">{{ "{:,}".format(summary.held_cost_twd) }}</span>
     </p>
 
+    {# 卡種數沒有專屬的後端欄位，借走勢圖最後一天的 held_kind_count。這對數字的
+       一致性是**建構保證不是測試保證**：trend[-1] 與 summary 都由同一份持有品清單
+       推導，但 `test_曲線最後一天與持有品摘要對得起來` 只驗 cost/market_value，
+       沒有卡種數可對（summary 裡沒有）。邊界：summary.held_count 數的是
+       status == 'held'，走勢圖那天數的是 purchase_date <= today——購入日填未來日期
+       的持有品會進前者不進後者，那時「N 張 · M 卡種」會內部不一致（機率低，但
+       CRUD 允許填未來日期）。trend 為空時整段省略，不寫「0 卡種」（同 §7.7 破折號
+       的道理：89 張卻寫 0 卡種是說謊）。 #}
     <p class="hero__count">
       {{ summary.held_count }} 張{% if trend %} · {{ trend[-1].held_kind_count }} 卡種{% endif %}
     </p>
