@@ -1,6 +1,9 @@
-{# 收藏總覽的卡圖牆：一格一個卡種，外加卡片展開時才取動能的腳本。預先拆檔
-   （prefactor）把這一區與 Hero 拆開，之後 #33（卡圖牆改版）、#34（卡片明細抽屜）
-   能各改各的。這一版只搬不改——markup、腳本、樣式類別全部逐字保留。
+{# 收藏總覽的卡圖牆：一格一個卡種，外加卡片展開時才取動能的腳本。
+
+   #32（卡圖牆改版）：收合格（`<summary>`）改成卡圖優先——實體卡 63/88 比例、
+   桌機約六欄手機兩欄、一般狀態不佔框（hover／focus 才由共用 .tile 浮出）、文字
+   分頁。展開區（`<dl>`、`.lots`、五顆增刪改按鈕、頁尾動能腳本）#32 不動，由 #33
+   連同抽屜整包換掉。
 
    需要的 context：`wall`、`liquidity`。分頁用 radio ＋ :checked，不等腳本。 #}
 
@@ -16,7 +19,7 @@
 
     <div class="grid" id="wall-held">
       {% for cell in wall.held %}
-      <details class="cell">
+      <details class="cell tile">
         <summary>
           {% if cell.apparel_id %}
           <img class="art" src="/api/cards/{{ cell.apparel_id }}/image" alt="" loading="lazy">
@@ -28,7 +31,8 @@
           {% if cell.return_rate is defined %}
           <span class="rate {{ 'up' if cell.return_rate > 0 else 'down' if cell.return_rate < 0 else '' }}">{{ "{:+.1%}".format(cell.return_rate) }}</span>
           {% else %}
-          <span class="rate unvalued">尚無市值</span>
+          {# 算不出報酬率就給破折號——0.0% 會被讀成「不賺不賠」（spec §7.7）。 #}
+          <span class="rate unvalued">—</span>
           {% endif %}
         </summary>
         <dl>
@@ -91,12 +95,13 @@
       {% endfor %}
     </div>
 
-    {# 已售出的成本、淨賺與售出日是**終局的**，不必展開就看得到；展開區留給那幾張
-       各自的增刪改（改回持有中、編輯、刪除）。summary 只吃 phrasing content，所以
-       這幾個數字是 span 而不是 dl。 #}
+    {# 收合狀態只留身分與已實現報酬率（spec §7.8）。購入成本、售出日、已實現損益
+       這三個終局數字改由 #33 的抽屜（§8.4）承接，不再直接放在格子上——留一塊給人
+       猜比展開多一步更糟的那條理由，在抽屜裡不成立。展開區（`.lots` 的增刪改）
+       #32 不動，#33 換掉。 #}
     <div class="grid" id="wall-sold">
       {% for cell in wall.sold %}
-      <details class="cell">
+      <details class="cell tile">
         <summary>
           {% if cell.apparel_id %}
           <img class="art" src="/api/cards/{{ cell.apparel_id }}/image" alt="" loading="lazy">
@@ -104,11 +109,8 @@
           <span class="art"></span>
           {% endif %}
           <span class="name">{{ cell.card_name_raw }}</span>
-          <span class="code">{{ cell.series_raw }} #{{ cell.number_raw }}{% if cell.sold_count > 1 %}・{{ cell.sold_count }} 張{% endif %}</span>
+          <span class="code">{{ cell.series_raw }} #{{ cell.number_raw }}{% if cell.sold_count > 1 %}・已售出 {{ cell.sold_count }} 張{% endif %}</span>
           <span class="rate {{ 'up' if cell.return_rate > 0 else 'down' if cell.return_rate < 0 else '' }}">{{ "{:+.1%}".format(cell.return_rate) }}</span>
-          <span class="fact"><em>成本</em>{{ "{:,}".format(cell.sold_cost_twd) }}</span>
-          <span class="fact"><em>淨賺</em><b class="{{ 'rate up' if cell.realized_pnl_twd > 0 else 'rate down' if cell.realized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(cell.realized_pnl_twd) }}</b></span>
-          <span class="fact"><em>售出日</em>{{ cell.sold_date }}</span>
         </summary>
         <ul class="lots">
           {% for lot in cell.holdings %}

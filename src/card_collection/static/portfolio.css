@@ -45,24 +45,41 @@
        分頁用 radio ＋ :checked 切換，不動 JS。 --- */
 .wall { margin: var(--space-8) 0 0; }
 .wall > input { position: absolute; opacity: 0; pointer-events: none; }
-.wall .tabs { display: flex; gap: .3rem; border-bottom: 1px solid var(--border-default); }
-.wall .tabs label { font-size: 14px; padding: .45rem .9rem; border: 1px solid transparent; border-bottom: none; border-radius: var(--radius-tag) var(--radius-tag) 0 0; color: var(--text-secondary); cursor: pointer; }
+
+/* 文字分頁 ＋ 作用中 accent 底線（spec §13.3），不是方框按鈕；仍用 radio ＋ :checked
+   實作，停用 JS 也能切、持有中是預設。 */
+.wall .tabs { display: flex; gap: var(--space-5); border-bottom: 1px solid var(--border-default); }
+.wall .tabs label { font-size: 14px; padding: var(--space-2) 0; border-bottom: 2px solid transparent; color: var(--text-secondary); cursor: pointer; }
+.wall .tabs label:hover { color: var(--text-primary); }
 #wall-tab-held:checked ~ .tabs label[for="wall-tab-held"],
-#wall-tab-sold:checked ~ .tabs label[for="wall-tab-sold"] { color: var(--text-primary); font-weight: 600; border-color: var(--border-default); background: var(--bg-surface); }
+#wall-tab-sold:checked ~ .tabs label[for="wall-tab-sold"] { color: var(--text-primary); border-bottom-color: var(--accent); }
 #wall-tab-held:focus-visible ~ .tabs label[for="wall-tab-held"],
 #wall-tab-sold:focus-visible ~ .tabs label[for="wall-tab-sold"] { outline: 2px solid var(--accent); outline-offset: 2px; }
-.wall .grid { display: none; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .9rem; margin: 1.2rem 0 0; }
+
+/* 桌機約六欄（auto-fill 隨寬度自己長，不寫死欄數），手機兩欄（spec §7.5／§11.3）。 */
+.wall .grid { display: none; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--space-4) var(--space-3); margin: var(--space-5) 0 0; }
 #wall-tab-held:checked ~ #wall-held, #wall-tab-sold:checked ~ #wall-sold { display: grid; }
-.wall .cell { border: 1px solid var(--border-default); border-radius: var(--radius-tag); padding: .6rem; }
+@media (max-width: 767px) {
+  .wall .grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* 卡圖優先（spec §7.6）：一般狀態不佔框，只留一點內距讓 hover 邊框不貼著卡圖；
+   hover／focus 的表面、邊框、陰影由共用 .tile 提供（design.css）。 */
+.wall .cell { padding: var(--space-1); }
 .wall summary { list-style: none; cursor: pointer; }
 .wall summary::-webkit-details-marker { display: none; }
-.wall .art { display: block; width: 100%; aspect-ratio: 10/7; object-fit: contain; background: var(--bg-surface); border-radius: var(--radius-tag); }
-.wall .name { display: block; margin-top: .45rem; font-size: 14px; line-height: 1.35; }
+/* 實體卡真實尺寸 63mm × 88mm（spec §7.6）。contain 讓卡緣完整、不裁切。
+   佔位底維持深色中性底（ADR-0022）。 */
+.wall .art { display: block; width: 100%; aspect-ratio: 63 / 88; object-fit: contain; background: var(--bg-surface); border-radius: var(--radius-tag); }
+.wall .name { display: block; margin-top: var(--space-2); font-size: 14px; line-height: 1.35; }
 .wall .code { display: block; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
-.wall .rate { display: block; margin-top: .2rem; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wall .rate { display: block; margin-top: var(--space-1); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .wall .rate.up { color: var(--positive); }
 .wall .rate.down { color: var(--negative); }
-.wall .rate.unvalued { font-size: 13px; font-weight: 400; color: var(--text-muted); }
+/* 算不出報酬率時的破折號：不著色、不加重，看起來像「暫時沒有」而不是一個結論。 */
+.wall .rate.unvalued { font-weight: 400; color: var(--text-muted); }
+
+/* --- 展開區。#32 不動，#33 連同抽屜整包換掉。 --- */
 .wall dl { margin: .6rem 0 0; padding-top: .6rem; border-top: 1px solid var(--border-default); font-size: 13px; }
 .wall dt { font-size: 12px; letter-spacing: .06em; color: var(--text-muted); }
 .wall dd { margin: 0 0 .5rem; font-variant-numeric: tabular-nums; }
@@ -70,9 +87,6 @@
 .wall .lots { margin: .15rem 0 0; padding: 0; list-style: none; color: var(--text-secondary); }
 .wall .lots li { display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: baseline; justify-content: space-between; font-variant-numeric: tabular-nums; }
 .wall .acts { display: inline-flex; gap: .1rem; flex-shrink: 0; }
-/* 已售出那一格的終局數字留在 summary 裡，不必展開就看得到。 */
-.wall .fact { display: block; margin-top: .2rem; font-size: 13px; font-variant-numeric: tabular-nums; }
-.wall .fact em { font-style: normal; font-size: 12px; letter-spacing: .06em; color: var(--text-muted); margin-right: .4rem; }
 .wall summary + .lots { margin: .6rem 0 0; padding-top: .6rem; border-top: 1px solid var(--border-default); font-size: 13px; }
 /* 空狀態。它不是暫時的鷹架——新買進的卡種永遠會先經歷「還沒有動能」。所以它
    有自己的一組樣式，看起來像刻意留的位子，而不是一塊沒渲染出來的空白。 */
