@@ -11,154 +11,152 @@
 {% include "_app_shell.html" %}
 <div class="wrap">
   <h1>持有品</h1>
-
-  <div class="totals">
-    <div class="total">
-      <span class="label">持有中</span>
-      <span class="value">{{ summary.held_count }} 張</span>
-    </div>
-    <div class="total">
-      <span class="label">持有中總成本</span>
-      <span class="value">{{ "{:,}".format(summary.held_cost_twd) }}</span>
-    </div>
-    {% if summary.valued_count %}
-    <div class="total">
-      <span class="label">持有中總市值</span>
-      <span class="value">{{ "{:,}".format(summary.held_market_value_twd) }}</span>
-    </div>
-    <div class="total">
-      <span class="label">未實現損益</span>
-      <span class="value {{ 'up' if summary.unrealized_pnl_twd > 0 else 'down' if summary.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(summary.unrealized_pnl_twd) }}</span>
-    </div>
-    {% endif %}
-    <div class="total">
-      <span class="label">已售出</span>
-      <span class="value">{{ summary.sold_count }} 張</span>
-    </div>
-    <div class="total">
-      <span class="label">已實現損益</span>
-      <span class="value {{ 'up' if summary.realized_pnl_twd > 0 else 'down' if summary.realized_pnl_twd < 0 else '' }}">{{ "{:,}".format(summary.realized_pnl_twd) }}</span>
-    </div>
-  </div>
-  <p class="hint">
-    金額一律新台幣。未實現損益（持有中，市值 − 成本）與已實現損益（已售出，售出價 − 成本）分開計算，不混入同一個數字。
-    {% if summary.unvalued_count %}
-      持有中還有 {{ summary.unvalued_count }} 張沒有市值（尚未對應到 SNKRDUNK，或還沒抓到成交紀錄），
-      未列入總市值與未實現損益——這兩個數字目前只涵蓋 {{ summary.valued_count }} 張。
-    {% endif %}
+  <p class="ledger-note">
+    逐筆帳本：每一張實體卡各自一列，持有中與已售出並排在同一個卡種底下，
+    完整生命週期看得到。首頁的收藏總覽數字不在這裡重複。
   </p>
 
   {% include "_market_freshness.html" %}
 
-  {# 更新行情、＋ 新增持有品、到卡種對應的連結都移到全站頁首。新增卡種是這一頁
-     專屬的操作，留在這裡。 #}
-  <div class="toolbar">
-    <h2>依卡種</h2>
-    <button onclick="openKind()">新增卡種</button>
+  {# 更新行情、＋ 新增持有品在全站頁首。即時搜尋與新增卡種是這一頁專屬。 #}
+  <div class="ledger-bar">
+    <input id="holdings-search" type="search" autocomplete="off"
+           placeholder="篩選卡名、系列代碼、卡號" aria-label="篩選持有品">
+    <button type="button" class="btn-secondary" onclick="openKind()">新增卡種</button>
   </div>
   <div id="crawl-report"></div>
 
-  <div class="tblwrap">
-    <table>
-      <thead>
-        <tr>
-          <th>卡圖</th><th>卡種</th>
-          <th class="num">持有中</th><th class="num">持有成本</th>
-          <th class="num">市值／張</th><th class="num">未實現損益</th>
-          <th class="num">已售出</th><th class="num">已實現損益</th>
-          <th>每一張</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for kind in kinds %}
-        <tr>
-          <td>
-            {% if kind.apparel_id %}
-              <img class="thumb" src="/api/cards/{{ kind.apparel_id }}/image" alt="">
-            {% else %}
-              <span class="noimg"></span>
-            {% endif %}
-          </td>
-          <td class="kind">
-            {{ kind.card_name_raw }}
-            <span class="code">{{ kind.series_raw }} #{{ kind.number_raw }}</span>
-          </td>
-          <td class="num">{{ kind.summary.held_count }}</td>
-          <td class="num">{{ "{:,}".format(kind.summary.held_cost_twd) }}</td>
-          <td class="num">
-            {% if kind.market_value %}
-              {{ "{:,}".format(kind.market_value.market_value_twd) }}
-              <span class="sample">{{ kind.market_value.sample_count }} 筆／{{ kind.market_value.sample_from }}～{{ kind.market_value.sample_to }}</span>
-              {% if kind.market_value.stale_days %}
-                <span class="stale">已過期 {{ kind.market_value.stale_days }} 天</span>
+  <div class="kinds" id="kind-list">
+    {% for kind in kinds %}
+    <section class="kind"
+             data-search="{{ (kind.card_name_raw ~ ' ' ~ kind.series_raw ~ ' ' ~ kind.number_raw) | lower }}">
+      <header class="kind__head">
+        {% if kind.apparel_id %}
+          <img class="kind__art" src="/api/cards/{{ kind.apparel_id }}/image" alt="">
+        {% else %}
+          <span class="kind__art kind__art--none"></span>
+        {% endif %}
+        <div class="kind__id">
+          <span class="kind__name">{{ kind.card_name_raw }}</span>
+          <span class="kind__code">{{ kind.series_raw }} #{{ kind.number_raw }}</span>
+        </div>
+        <dl class="kind__stats">
+          <div><dt>持有中</dt><dd class="tnum">{{ kind.summary.held_count }}</dd></div>
+          {% if kind.summary.sold_count %}
+          <div><dt>已售出</dt><dd class="tnum">{{ kind.summary.sold_count }}</dd></div>
+          {% endif %}
+          <div><dt>持有成本</dt><dd class="tnum">{{ "{:,}".format(kind.summary.held_cost_twd) }}</dd></div>
+          <div>
+            <dt>市值／張</dt>
+            <dd class="tnum">
+              {% if kind.market_value %}
+                {{ "{:,}".format(kind.market_value.market_value_twd) }}
+                <span class="kind__sample">{{ kind.market_value.sample_count }} 筆／{{ kind.market_value.sample_from }}～{{ kind.market_value.sample_to }}</span>
+                {% if kind.market_value.stale_days %}
+                <span class="kind__stale">已過期 {{ kind.market_value.stale_days }} 天</span>
+                {% endif %}
+              {% else %}
+                <span class="none">—</span>
               {% endif %}
-            {% else %}
-              <span class="none">—</span>
-            {% endif %}
-          </td>
-          <td class="num">
-            {% if kind.summary.valued_count %}
-              <span class="{{ 'up' if kind.summary.unrealized_pnl_twd > 0 else 'down' if kind.summary.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(kind.summary.unrealized_pnl_twd) }}</span>
-            {% else %}
-              <span class="none">—</span>
-            {% endif %}
-          </td>
-          <td class="num">{{ kind.summary.sold_count }}</td>
-          <td class="num">
-            {% if kind.summary.sold_count %}
-              {{ "{:,}".format(kind.summary.realized_pnl_twd) }}
-            {% else %}
-              <span class="none">—</span>
-            {% endif %}
-          </td>
-          <td>
-            <ul class="lots">
-              {% for holding in kind.holdings %}
-              <li{% if holding.status == 'sold' %} class="sold"{% endif %}
-                  data-id="{{ holding.id }}"
-                  data-kind-id="{{ holding.mapping_candidate_id }}"
-                  data-kind="{{ kind.card_name_raw }}（{{ kind.series_raw }} #{{ kind.number_raw }}）"
-                  data-purchase="{{ holding.purchase_date }}"
-                  data-cost="{{ holding.cost_twd }}"
-                  data-status="{{ holding.status }}"
-                  {%- if holding.status == 'sold' %}
-                  data-sold="{{ holding.sold_date }}"
-                  data-price="{{ holding.sold_price_twd }}"
-                  data-realized="{{ holding.realized_pnl_twd }}"
-                  {%- endif %}>
-                <span>
-                {{ holding.purchase_date }} 購入 {{ "{:,}".format(holding.cost_twd) }}
+            </dd>
+          </div>
+          <div>
+            <dt>未實現損益</dt>
+            <dd class="tnum">
+              {% if kind.summary.valued_count %}
+                <span class="{{ 'dir-up' if kind.summary.unrealized_pnl_twd > 0 else 'dir-down' if kind.summary.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(kind.summary.unrealized_pnl_twd) }}</span>
+              {% else %}
+                <span class="none">—</span>
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+      </header>
+
+      <div class="tblwrap">
+        <table>
+          <thead>
+            <tr>
+              <th>購入日</th>
+              <th class="num">購入成本</th>
+              <th>狀態</th>
+              <th class="num">損益</th>
+              <th>售出</th>
+              <th class="acts-col">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for holding in kind.holdings %}
+            <tr class="lot{% if holding.status == 'sold' %} lot--sold{% endif %}"
+                data-id="{{ holding.id }}"
+                data-kind-id="{{ holding.mapping_candidate_id }}"
+                data-kind="{{ kind.card_name_raw }}（{{ kind.series_raw }} #{{ kind.number_raw }}）"
+                data-purchase="{{ holding.purchase_date }}"
+                data-cost="{{ holding.cost_twd }}"
+                data-status="{{ holding.status }}"
                 {%- if holding.status == 'sold' %}
-                  → {{ holding.sold_date }} 售出 {{ "{:,}".format(holding.sold_price_twd) }}
-                  （{{ "{:+,}".format(holding.realized_pnl_twd) }}，{{ "{:+.1%}".format(holding.return_rate) }}）
-                {%- elif holding.market_value_twd is defined %}
-                  → 現值 {{ "{:,}".format(holding.market_value_twd) }}
-                  （{{ "{:+,}".format(holding.unrealized_pnl_twd) }}，{{ "{:+.1%}".format(holding.return_rate) }}）
-                {%- endif %}
-                </span>
-                <span class="acts">
+                data-sold="{{ holding.sold_date }}"
+                data-price="{{ holding.sold_price_twd }}"
+                data-realized="{{ holding.realized_pnl_twd }}"
+                {%- endif %}>
+              <td>{{ holding.purchase_date }}</td>
+              <td class="num">{{ "{:,}".format(holding.cost_twd) }}</td>
+              <td>{{ '已售出' if holding.status == 'sold' else '持有中' }}</td>
+              <td class="num">
+                {% if holding.status == 'sold' %}
+                  <span class="{{ 'dir-up' if holding.realized_pnl_twd > 0 else 'dir-down' if holding.realized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(holding.realized_pnl_twd) }}</span>
+                  <span class="lot__rate">{{ "{:+.1%}".format(holding.return_rate) }}</span>
+                {% elif holding.unrealized_pnl_twd is defined %}
+                  <span class="{{ 'dir-up' if holding.unrealized_pnl_twd > 0 else 'dir-down' if holding.unrealized_pnl_twd < 0 else '' }}">{{ "{:+,}".format(holding.unrealized_pnl_twd) }}</span>
+                  <span class="lot__rate">{{ "{:+.1%}".format(holding.return_rate) }}</span>
+                {% else %}
+                  {# 沒有市值就讓損益欄不存在——不是 0（ADR-0020）。 #}
+                  <span class="none">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if holding.status == 'sold' %}
+                  {{ holding.sold_date }}／{{ "{:,}".format(holding.sold_price_twd) }}
+                {% else %}
+                  <span class="none">—</span>
+                {% endif %}
+              </td>
+              <td class="acts-col">
+                <span class="lot__acts">
                   {% if holding.status == 'held' %}
-                  <button class="link" onclick="openSale(this)">售出</button>
-                  {% else %}
-                  <button class="link" onclick="openUnsell(this)">改回持有中</button>
-                  {% endif %}
+                  <button class="link lot__sell" onclick="openSale(this)">售出</button>
                   <button class="link" onclick="openEdit(this)">編輯</button>
-                  <button class="link danger" onclick="openDelete(this)">刪除</button>
+                  <details class="more">
+                    <summary>⋯</summary>
+                    <div class="more__panel">
+                      <button type="button" class="danger" onclick="openDelete(this)">刪除</button>
+                    </div>
+                  </details>
+                  {% else %}
+                  <button class="link" onclick="openEdit(this)">編輯</button>
+                  <details class="more">
+                    <summary>⋯</summary>
+                    <div class="more__panel">
+                      <button type="button" onclick="openUnsell(this)">改回持有中</button>
+                      <button type="button" class="danger" onclick="openDelete(this)">刪除</button>
+                    </div>
+                  </details>
+                  {% endif %}
                 </span>
-              </li>
-              {% endfor %}
-            </ul>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endfor %}
   </div>
 
+  <p class="empty-note" id="holdings-empty" hidden>找不到符合項目的持有品</p>
+
   {% if quarantined %}
-  <div class="toolbar">
-    <h2>待審成交（{{ quarantined|length }} 筆）</h2>
-  </div>
+  <h2>待審成交（{{ quarantined|length }} 筆）</h2>
   <p class="hint">這些成交無法高信心確認為「單張、PSA 10、屬於此卡種」，因此不參與任何計算。它們沒有被丟掉，等待人工判定。</p>
   <div class="tblwrap">
     <table>
@@ -171,7 +169,7 @@
       <tbody>
         {% for sale in quarantined %}
         <tr>
-          <td class="kind">
+          <td class="kind-cell">
             {{ sale.card_name_raw }}
             <span class="code">{{ sale.series_raw }} #{{ sale.number_raw }}</span>
           </td>
@@ -195,6 +193,25 @@
 {% include "_market_script.html" %}
 {% include "_holding_editor.html" %}
 <script>
+  {# 即時搜尋：純前端，打字即篩選（spec §9.2）。沒有送出按鈕、沒有篩選面板。
+     卡名、系列代碼、卡號三個欄位都在卡種層，所以整個卡種區塊一起顯示或隱藏。 #}
+  (function () {
+    const box = document.getElementById("holdings-search");
+    const groups = Array.from(document.querySelectorAll("#kind-list .kind"));
+    const empty = document.getElementById("holdings-empty");
+    if (!box) return;
+    box.addEventListener("input", function () {
+      const query = box.value.trim().toLowerCase();
+      let shown = 0;
+      for (const group of groups) {
+        const hit = query === "" || group.dataset.search.includes(query);
+        group.hidden = !hit;
+        if (hit) shown += 1;
+      }
+      empty.hidden = shown !== 0;
+    });
+  })();
+
   {# 新增卡種是**卡種**的操作，不是持有品的，所以它留在有這顆按鈕的這一頁，
      不進共用的持有品編輯器。對話框本身沿用上面那份。 #}
   const textField = (id, label) => field(label, `<input id="${id}" type="text">`);

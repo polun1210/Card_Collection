@@ -408,15 +408,21 @@ def test_匯入失敗後資料庫不留半成品(client_factory, write_notion_cs
 
 
 def test_持有品頁面列出卡種張數與成本(client):
+    # 意圖不變（頁面按卡種列出張數與成本），寫法改為驗**每個卡種自己的**數字。
+    # 舊版驗的是頁頂全頁彙總 HELD_COST_TWD / REALIZED_PNL_TWD——那組與首頁儀表板
+    # 重複的數字已依 #34 移除（uiux-spec §9.1），彙總不重複這條由
+    # test_unrealized.py::test_持有品頁面不重複首頁的彙總數字 反向守住。
+
     # Act
     response = client.get("/holdings")
 
     # Assert
     assert response.status_code == 200
     html = response.text
+    # MEGA Lucario（M2a #228）這一組：3 張持有中、合計成本 2400+2600+2650=7,650。
     assert "MEGA Lucario" in html
-    assert f"{HELD_COST_TWD:,}" in html
-    assert f"{REALIZED_PNL_TWD:,}" in html
+    assert "M2a #228" in html
+    assert f"{2400 + 2600 + 2650:,}" in html
 
 
 def test_持有品頁面顯示已確認卡種的卡圖(client):

@@ -47,6 +47,20 @@
   const dateField = (id, label, value) => field(label, `<input id="${id}" type="date" value="${value}">`);
   const moneyField = (id, label, value) => field(label, `<input id="${id}" type="number" min="1" step="1" value="${value}">`);
 
+  const postJson = (url, body) =>
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  const sendRequest = (request) =>
+    fetch(request.url, {
+      method: request.method,
+      headers: { "Content-Type": "application/json" },
+      body: request.body === undefined ? undefined : JSON.stringify(request.body),
+    });
+
   function kindSelect(selected) {
     const clone = document.getElementById("kind-options").cloneNode(true);
     clone.id = "f-kind";
@@ -55,6 +69,35 @@
       option.toggleAttribute("selected", Number(option.value) === selected);
     }
     return field("卡種", clone.outerHTML);
+  }
+
+  // 新增持有品時的卡種選擇：既有卡種 + 一個「＋ 新增卡種」選項。選了它就
+  // 展開系列／卡號／卡名三個欄位，送出時先建卡種再建持有品——不強迫先做完
+  // SNKRDUNK 對應（ADR-0020 / spec §9.7）。這段完全靠對話框自己的欄位，
+  // 不讀頁面上的表格或 data 屬性，所以在首頁按「＋ 新增持有品」也一樣能用。
+  const NEW_KIND = "__new__";
+
+  function kindChoice() {
+    const clone = document.getElementById("kind-options").cloneNode(true);
+    clone.id = "f-kind";
+    clone.removeAttribute("hidden");
+    clone.setAttribute("onchange", "toggleNewKind()");
+    const withNew = clone.outerHTML.replace(
+      "</select>",
+      `<option value="${NEW_KIND}">＋ 新增卡種…</option></select>`,
+    );
+    const extra =
+      '<div id="new-kind-fields" hidden>' +
+      field("系列代碼", '<input id="f-new-series" type="text">') +
+      field("卡號", '<input id="f-new-number" type="text">') +
+      field("卡名", '<input id="f-new-name" type="text">') +
+      "</div>";
+    return field("卡種", withNew) + extra;
+  }
+
+  function toggleNewKind() {
+    const isNew = document.getElementById("f-kind").value === NEW_KIND;
+    document.getElementById("new-kind-fields").hidden = !isNew;
   }
 
   function openEditor(config) {
@@ -84,13 +127,12 @@
     const submit = document.getElementById("editor-submit");
     error.textContent = "";
     submit.disabled = true;
-    const request = pending.build();
     try {
-      const response = await fetch(request.url, {
-        method: request.method,
-        headers: { "Content-Type": "application/json" },
-        body: request.body === undefined ? undefined : JSON.stringify(request.body),
-      });
+      // 多數動作是單一請求（pending.build）；當場新建卡種再建持有品是兩段，
+      // 由 pending.send 自己串起來，回傳最後那個 Response 供這裡判斷成敗。
+      const response = pending.send
+        ? await pending.send()
+        : await sendRequest(pending.build());
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         error.textContent = detailOf(body) || `失敗（${response.status}）`;
@@ -108,17 +150,26 @@
   function openCreate() {
     openEditor({
       title: "新增持有品",
-      about: "購入日預設今天，補登較早的購入時改掉即可。",
-      fields: kindSelect(null) + dateField("f-purchase", "購入日", TODAY) + moneyField("f-cost", "購入成本（新台幣）", ""),
-      build: () => ({
-        method: "POST",
-        url: "/api/holdings",
-        body: {
-          mapping_candidate_id: Number(str("f-kind")),
+      about: "購入日預設今天，補登較早的購入時改掉即可。卡種不在清單裡就選「＋ 新增卡種」，可以當場建立並直接完成這一筆。",
+      fields: kindChoice() + dateField("f-purchase", "購入日", TODAY) + moneyField("f-cost", "購入成本（新台幣）", ""),
+      send: async () => {
+        let kindId = str("f-kind");
+        if (kindId === NEW_KIND) {
+          // 先把卡種建起來，它自行進入待確認清單；抓不到 SNKRDUNK 也不影響這步。
+          const created = await postJson("/api/card-kinds", {
+            series_raw: str("f-new-series"),
+            number_raw: str("f-new-number"),
+            card_name_raw: str("f-new-name"),
+          });
+          if (!created.ok) return created;
+          kindId = String((await created.json()).id);
+        }
+        return postJson("/api/holdings", {
+          mapping_candidate_id: Number(kindId),
           purchase_date: str("f-purchase"),
           cost_twd: num("f-cost"),
-        },
-      }),
+        });
+      },
     });
   }
 
@@ -181,8 +232,9 @@
       title: "刪除持有品",
       // 確認的必須是**具體哪一筆**，不是一個抽象的「確定嗎」。
       about: `${lot.kind}／${lot.purchase} 購入 ${money(lot.cost)}`,
+      // 已售出的還要說出售出日、售出價，以及刪掉後會消失多少已實現損益（spec §9.8）。
       warning: lot.status === "sold"
-        ? `刪除後已實現損益會減少 ${money(lot.realized)}。這個動作無法復原。`
+        ? `${lot.sold} 售出 ${money(lot.price)}。刪除後已實現損益會少掉 ${money(lot.realized)}。這個動作無法復原。`
         : "這個動作無法復原。",
       submitLabel: "確定刪除",
       build: () => ({ method: "DELETE", url: `/api/holdings/${lot.id}` }),
