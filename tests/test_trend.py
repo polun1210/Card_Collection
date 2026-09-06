@@ -367,7 +367,7 @@ def test_首頁畫出走勢圖而不是留一個佔位方塊(client, confirm_car
     html = client.get("/").text
 
     # Assert
-    assert "走勢圖" in html
+    assert "資產走勢" in html
     assert "<svg" in html
     assert "總成本" in html
 
@@ -426,5 +426,5 @@ def test_沒有曲線可畫時說明在等什麼(client):
     html = client.get("/").text
 
     # Assert：空白會被讀成「壞掉了」
-    assert "走勢圖" in html
+    assert "資產走勢" in html
     assert "畫不出曲線" in html
