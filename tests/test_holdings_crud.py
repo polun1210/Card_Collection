@@ -598,11 +598,17 @@ def test_已售出的刪除確認帶出售出日與售出價(client, add_holding
     )
 
     page = _page(client)
-    # spec §9.8：已售出的刪除確認要另外列出售出日、售出價，以及刪掉後會消失多少
-    # 已實現損益。確認訊息在腳本裡組出來，斷言那幾個模板片段有服務出去。舊版
-    # （8547bfe）的 sold 分支只有「刪除後已實現損益會減少 …」，沒有售出日與售出價。
+    # spec §1.4 誠實性紅線：刪除確認必須說得出具體哪一筆與它的影響。
+    # 舊版（8547bfe）的 sold 分支只有「刪除後已實現損益會減少 …」，沒有售出日與售出價。
+    # 新版的確認訊息在腳本裡組出來，這兩句斷言那幾個模板片段有服務出去。
     assert "${lot.sold} 售出 ${money(lot.price)}" in page
     assert "已實現損益會少掉 ${money(lot.realized)}" in page
+    # 模板存在還不夠——要插的值也得真的到得了那一列，否則 lot.price 對上一個
+    # 根本沒渲染的 data-price，這條測試照樣會綠。這也守住把 <li> 重寫成 <tr>
+    # 時「掉一個 data 屬性」的風險。realized = 4000 − 2600 = 1400。
+    assert 'data-sold="2026-05-06"' in page
+    assert 'data-price="4000"' in page
+    assert 'data-realized="1400"' in page
 
 
 def test_手機上仍讀得到持有品頁(client):
