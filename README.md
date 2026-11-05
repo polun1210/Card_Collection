@@ -117,44 +117,6 @@ tests/                         # pytest，含錄下的真實 API 回應
 docs/adr/                      # 25 份架構決策紀錄
 ```
 
----
-
-## 在自己電腦上執行
-
-需要先安裝 [uv](https://docs.astral.sh/uv/)（Python 專案與套件管理工具）。
-
-```powershell
-uv sync                                              # 安裝相依套件（只做一次）
-uv run uvicorn card_collection.main:app --reload     # 啟動伺服器
-```
-
-看到 `Uvicorn running on http://127.0.0.1:8000` 之後，用瀏覽器打開 <http://127.0.0.1:8000>。
-在 PowerShell 按 `Ctrl + C` 關閉。
-
-> ⚠️ 首頁的「更新行情」按鈕會真的連到 SNKRDUNK 爬一輪資料（約 105 秒、對外發送 79 個
-> 請求）。只想看畫面的話先別按。
-
-<details>
-<summary>用手機看（同一個區網）</summary>
-
-1. 啟動時把 host 改成 `0.0.0.0`，接受區網內其他裝置的連線：
-
-   ```powershell
-   uv run uvicorn card_collection.main:app --host 0.0.0.0 --port 8000
-   ```
-
-2. 第一次執行時 Windows 防火牆會跳出詢問視窗，勾選**私人網路（Private）**並允許。
-3. 用 `ipconfig` 查電腦的 `IPv4 位址`（通常長得像 `192.168.1.23`）。
-4. 手機瀏覽器打開 `http://192.168.1.23:8000`（換成你查到的 IP）。
-
-</details>
-
-跑測試：
-
-```powershell
-uv run python -m pytest -q
-```
-
 ## 文件索引
 
 | 文件 | 內容 |
