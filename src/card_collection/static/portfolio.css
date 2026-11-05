@@ -121,6 +121,25 @@
 .drawer__body { padding: var(--space-5); }
 .drawer__art { display: block; width: 42%; aspect-ratio: 63 / 88; object-fit: contain; background: var(--bg-surface); border-radius: var(--radius-tag); margin: 0 0 var(--space-5); }
 
+/* 抽屜卡圖的傾斜與反光（ADR-0024）。只作用在有卡圖時包起來的 .tilt；沒卡圖的佔位
+   （.drawer__art--empty）不包。卡圖用 cover＋卡片圓角，讓傾斜與反光貼著卡的形狀；
+   卡圖牆 .wall .art 的 contain 是 §7.1 的決定，不動。 */
+.tilt { width: 62%; margin: 0 auto var(--space-5); perspective: 600px; touch-action: none; }
+.tilt__card { position: relative; aspect-ratio: 63 / 88; border-radius: 4.5% / 3.5%; overflow: hidden;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(var(--s, 1));
+  transition: transform .5s cubic-bezier(.2, .8, .2, 1), box-shadow .5s;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5); will-change: transform; }
+.tilt.active .tilt__card { transition: transform .08s linear, box-shadow .2s; box-shadow: 0 20px 50px rgba(0, 0, 0, .65); }
+.tilt .drawer__art { width: 100%; height: 100%; margin: 0; object-fit: cover; border-radius: 0; }
+.tilt__glare { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay;
+  opacity: var(--go, 0); transition: opacity .4s;
+  background: radial-gradient(farthest-corner circle at var(--gx, 50%) var(--gy, 50%),
+    rgba(255, 255, 255, .85) 8%, rgba(255, 255, 255, .35) 25%, rgba(0, 0, 0, .45) 90%); }
+@media (prefers-reduced-motion: reduce) {
+  .tilt__card { transform: none !important; }
+  .tilt__glare { display: none; }
+}
+
 /* 區塊之間主要靠間距，區塊之間一條細分隔線（spec §8.2）。 */
 .drawer__sec { padding: var(--space-5) 0; border-top: 1px solid var(--border-default); }
 .drawer__sec:first-of-type { padding-top: 0; border-top: 0; }
