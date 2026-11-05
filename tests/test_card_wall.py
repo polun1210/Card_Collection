@@ -6,6 +6,7 @@
 金額不重算一份：每一格的數字都由持有品摘要算出，與全站總計同一套帳。
 """
 
+import re
 from datetime import timedelta
 
 import pytest
@@ -405,3 +406,74 @@ def test_卡圖牆不靠橫向捲動排版(client, confirm_card, crawl):
     assert "repeat(auto-fill" in css.text
     # 意圖三：頁面本身永不橫向捲動——收藏總覽這一頁不出現任何 overflow-x。
     assert "overflow-x" not in css.text
+
+
+# --- 抽屜卡圖的傾斜與反光（ADR-0024）-------------------------------------------
+# 斷言比對實際標籤結構，而不是 `"tilt" in html`：頁尾 <script> 與樣板註解裡都會出現
+# 這些字，寬鬆比對會恆真。
+
+
+def _drawer_templates(html: str) -> list[str]:
+    return re.findall(r'<template class="cell__detail">(.*?)</template>', html, re.S)
+
+
+def test_有卡圖的抽屜內容把卡圖包進傾斜容器(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    html = client.get("/").text
+
+    # Assert：每個有卡圖的明細，卡圖都緊貼在 .tilt__card 之內，後面依序接光帶層、反光層
+    with_art = [t for t in _drawer_templates(html) if 'class="drawer__art"' in t]
+    assert with_art
+    for template in with_art:
+        assert re.search(
+            r'<div class="tilt">\s*<div class="tilt__card">\s*'
+            r'<img class="drawer__art" src="/api/cards/\d+/image" alt="">\s*'
+            r'<div class="tilt__sheen"></div>\s*'
+            r'<div class="tilt__glare"></div>\s*</div>\s*</div>',
+            template,
+        )
+
+
+def test_沒有卡圖的佔位不被包進傾斜容器(client):
+    # Act：沒有確認任何對應，每一格都沒有 apparel id
+    html = client.get("/").text
+
+    # Assert
+    templates = _drawer_templates(html)
+    assert templates
+    for template in templates:
+        assert '<div class="drawer__art drawer__art--empty"></div>' in template
+        assert 'class="tilt' not in template
+
+
+def test_頁面沒有載入任何外部腳本或樣式表(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    html = client.get("/").text
+
+    # Assert：<script src> 與 <link href> 都只能是站內路徑
+    sources = re.findall(r'<script[^>]*\ssrc="([^"]*)"', html)
+    sources += re.findall(r'<link[^>]*\shref="([^"]*)"', html)
+    assert sources
+    for source in sources:
+        assert source.startswith("/"), source
+        assert not source.startswith("//"), source
+
+
+def test_傾斜樣式只作用在抽屜且尊重減少動態偏好(client):
+    # Act
+    css = client.get("/static/portfolio.css").text
+
+    # Assert
+    assert ".tilt__card" in css
+    reduced = re.search(
+        r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?)\}\s*\}", css, re.S
+    )
+    assert reduced and ".tilt__card" in reduced.group(1)
+    assert ".tilt__sheen" in reduced.group(1)
+    assert ".tilt__glare" in reduced.group(1)
