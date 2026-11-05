@@ -57,6 +57,7 @@
           <div class="tilt">
             <div class="tilt__card">
               <img class="drawer__art" src="/api/cards/{{ cell.apparel_id }}/image" alt="">
+              <div class="tilt__sheen"></div>
               <div class="tilt__glare"></div>
             </div>
           </div>
@@ -166,6 +167,7 @@
           <div class="tilt">
             <div class="tilt__card">
               <img class="drawer__art" src="/api/cards/{{ cell.apparel_id }}/image" alt="">
+              <div class="tilt__sheen"></div>
               <div class="tilt__glare"></div>
             </div>
           </div>
@@ -302,6 +304,8 @@
       style.setProperty("--ry", (px - 0.5) * 2 * MAX_TILT_DEG + "deg");
       style.setProperty("--rx", -(py - 0.5) * 2 * MAX_TILT_DEG + "deg");
       style.setProperty("--s", TILT_SCALE);
+      style.setProperty("--sx", 20 + px * 60 + "%");
+      style.setProperty("--sy", 20 + py * 60 + "%");
       style.setProperty("--gx", px * 100 + "%");
       style.setProperty("--gy", py * 100 + "%");
       style.setProperty("--go", 1);

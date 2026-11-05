@@ -424,13 +424,14 @@ def test_有卡圖的抽屜內容把卡圖包進傾斜容器(client, confirm_car
     # Act
     html = client.get("/").text
 
-    # Assert：每個有卡圖的明細，卡圖都緊貼在 .tilt__card 之內，後面接反光層
+    # Assert：每個有卡圖的明細，卡圖都緊貼在 .tilt__card 之內，後面依序接光帶層、反光層
     with_art = [t for t in _drawer_templates(html) if 'class="drawer__art"' in t]
     assert with_art
     for template in with_art:
         assert re.search(
             r'<div class="tilt">\s*<div class="tilt__card">\s*'
             r'<img class="drawer__art" src="/api/cards/\d+/image" alt="">\s*'
+            r'<div class="tilt__sheen"></div>\s*'
             r'<div class="tilt__glare"></div>\s*</div>\s*</div>',
             template,
         )
@@ -474,4 +475,5 @@ def test_傾斜樣式只作用在抽屜且尊重減少動態偏好(client):
         r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?)\}\s*\}", css, re.S
     )
     assert reduced and ".tilt__card" in reduced.group(1)
+    assert ".tilt__sheen" in reduced.group(1)
     assert ".tilt__glare" in reduced.group(1)

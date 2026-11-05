@@ -14,9 +14,16 @@ Date: 2026-11-05
   `_portfolio_wall.html` 既有的 `<script>`，CSS 放進 `portfolio.css`。
 - 結構：`.tilt`（perspective）> `.tilt__card`（rotateX／rotateY／scale，由 CSS 變數驅動）>
   `img.drawer__art` ＋ `.tilt__glare`（radial-gradient ＋ `mix-blend-mode: overlay`）。
+- 反光分兩層，都貼在卡面上：`.tilt__sheen`（整卡彩虹光帶，`color-dodge`，隨傾斜流動，
+  透明度 .3）與 `.tilt__glare`（柔和的聚光，`overlay`）。結構順序為 img → sheen → glare。
 - 手感數值：最大傾斜 14 度、放大 1.04 倍、反光中等強度。這組數值來自使用者已看過並認可的樣品。
 - `prefers-reduced-motion: reduce` 時不傾斜、不顯示反光。
 - 沒有 JS 時，抽屜卡圖照常顯示，只是不會動。
+
+使用者看過三種反光方案的樣品後，選了「整卡彩虹光帶，但彩虹淡一點」。這和
+pokemon-cards-css 的 shine 不同：**所有卡套同一種光帶，不需要稀有度資料**，也不靠
+`clip-path` 對準卡框。§7.5 理由 3 提到的「實拍照片已有 holo，疊上去會變雙重」確實存在，
+使用者看過後接受；透明度降到 .3 就是為了減輕這一點。
 
 ## Context
 
