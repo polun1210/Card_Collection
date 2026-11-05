@@ -11,6 +11,7 @@
 斷言一律走 HTTP，不呼叫內部函式——重寫實作但行為不變時，測試不該紅。
 """
 
+import re
 from datetime import UTC, datetime
 
 from conftest import (
@@ -408,7 +409,7 @@ def test_資料不足一年時不顯示YTD(client, confirm_card, crawl):
     assert ">YTD<" not in html
 
 
-def test_首頁揭露當天的涵蓋率(client, confirm_card, crawl):
+def test_首頁讀數有當天的總市值與總成本而沒有涵蓋率(client, confirm_card, crawl):
     # Arrange
     _crawled(client, confirm_card, crawl)
     point = _at(_trend(client), TODAY)
@@ -416,9 +417,13 @@ def test_首頁揭露當天的涵蓋率(client, confirm_card, crawl):
     # Act
     html = client.get("/").text
 
-    # Assert：涵蓋率是必要的，不是裝飾
-    assert "涵蓋率" in html
-    assert f"{point['valued_kind_count']} / {point['held_kind_count']}" in html
+    # Assert：ADR-0025 拿掉圖上的涵蓋率；資料 API 仍帶（上面幾條資料測試守著）
+    readout = re.search(r'<p class="readout">(.*?)</p>', html, re.S)
+    assert readout, "找不到讀數區塊，下面的斷言會變成對空字串斷言"
+    assert f"{point['market_value_twd']:,}" in readout.group(1)
+    assert f"{point['cost_twd']:,}" in readout.group(1)
+    assert "涵蓋率" not in html
+    assert "trend-coverage" not in html
 
 
 def test_沒有曲線可畫時說明在等什麼(client):
@@ -430,7 +435,7 @@ def test_沒有曲線可畫時說明在等什麼(client):
     assert "畫不出曲線" in html
 
 
-def test_走勢圖的線與量尺不帶漲跌語意(client):
+def test_走勢圖的線不帶漲跌語意(client):
     # Act：透過 TestClient 取樣式表，不直接讀檔（#29 立下的先例）
     css = client.get("/static/portfolio.css").text
     rules = [
@@ -440,6 +445,30 @@ def test_走勢圖的線與量尺不帶漲跌語意(client):
     # Assert：防「空洞的真」——選擇器改名後這條會變成對空清單斷言，那比紅燈更糟
     assert rules, "#trend-chart 的規則不見了，這條測試已經沒有在驗任何東西"
 
-    # 曲線講的是「總市值多少」不是「賺賠」，量尺講的是涵蓋率不是方向（spec §7.3）。
+    # 曲線講的是「總市值多少」不是「賺賠」（spec §7.3）。
     # 斷言語意色**不出現**，而不是等於某個中性 token，換別的中性色也不會假紅。
     assert not [rule for rule in rules if "--positive" in rule or "--negative" in rule]
+
+
+def test_走勢圖是單線面積圖沒有量尺與成本線(client, confirm_card, crawl):
+    # Arrange
+    _crawled(client, confirm_card, crawl)
+
+    # Act
+    html = client.get("/").text
+
+    # Assert：比對實際結構而不是寬鬆的 in——漸層定義在 <defs>，舊的圖層名不再被畫出
+    assert re.search(r'<linearGradient id="trend-fill"[^>]*>.*?</linearGradient>', html, re.S)
+    assert 'id="trend-hatch"' not in html
+    assert 'class="trend-legend"' not in html
+    assert not re.search(r'"(gap|covered|band|cost|cost-dot|partial)"', html)
+    assert re.search(r'node\("path", \{ d: [^}]*\}, "area"\)', html)
+
+
+def test_走勢圖的線色是頁面層變數而非語意色(client):
+    # Act
+    css = client.get("/static/portfolio.css").text
+
+    # Assert
+    assert re.search(r"--trend-line:\s*#[0-9A-Fa-f]{6}", css)
+    assert "var(--trend-line)" in css

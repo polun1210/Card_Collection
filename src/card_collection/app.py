@@ -4,6 +4,7 @@
 **web 服務專屬的啟動儀式**：卡種列的 seed 與持有品的一次性匯入。
 """
 
+import mimetypes
 import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -24,10 +25,40 @@ from .notion_csv import read_card_kinds
 from .services import build_services
 from .snkrdunk import DEFAULT_REQUEST_INTERVAL_SECONDS, SnkrdunkError
 
+# Windows 上 Python 的 mimetypes 不認得 .webp，StaticFiles 會回 application/octet-stream；
+# Chrome 會自己嗅探，Safari 不保證。在建立 StaticFiles 之前先註冊。
+mimetypes.add_type("image/webp", ".webp")
+
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 # 三頁的樣式從樣板的 inline <style> 移出後住在這裡（ADR-0023）。掛的是本機檔案，
 # 不引入任何外部資源，不違反「零外部資源」的原則。
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+class RevalidatingStaticFiles(StaticFiles):
+    """每次使用前都先向伺服器確認新舊。
+
+    StaticFiles 只給 etag／last-modified、沒有 Cache-Control，瀏覽器會用猜測式快取
+    （heuristic freshness）直接拿舊檔、連問都不問。這是個人本機工具，改了樣式或換了
+    背景圖，一般重新整理就該看到新版。`no-cache` 是「可以快取，但用之前要先問」，
+    搭配 etag 沒變動時回 304，成本很低；不用 `no-store`。
+    """
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+def static_url(path: str) -> str:
+    """樣板用的靜態檔網址，後面帶檔案修改時間當版本號。
+
+    在 no-cache 生效之前就存進瀏覽器的舊樣式表，不會回頭問伺服器；網址一變，舊快取就
+    對不上、只能重抓。之後每改一次檔案版本號就跟著變。每次渲染即時 stat，改完存檔
+    重新整理就生效，不必重啟伺服器。
+    """
+    version = (STATIC_DIR / path).stat().st_mtime_ns
+    return f"/static/{path}?v={version}"
 
 
 def create_app(
@@ -70,7 +101,8 @@ def create_app(
 
     app = FastAPI(title="Card Collection", lifespan=lifespan)
     app.state.templates = Jinja2Templates(directory=TEMPLATES_DIR)
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.state.templates.env.globals["static_url"] = static_url
+    app.mount("/static", RevalidatingStaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(router)
 
     @app.exception_handler(CardImageError)

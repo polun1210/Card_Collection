@@ -13,6 +13,9 @@
 :root {
   color-scheme: dark;
 
+  /* 頁面背景圖的透明度。圖檔是個人檔案（static/local/，不進 git），見 interface.md。 */
+  --bg-image-opacity: .4;
+
   /* --- 表面層級（graphite／charcoal，介面退到背景，卡圖才是主要顏色來源） --- */
   --bg-app: #0B0F14;
   --bg-surface: #111821;
@@ -88,6 +91,22 @@ body {
   font-size: 15px;
   line-height: 1.6;
   -webkit-text-size-adjust: 100%;
+  isolation: isolate;
+}
+
+/* 背景圖疊在 body 深色底之上、內容之下。圖檔不存在時 url() 載入失敗，什麼都不畫，
+   頁面照常是深色底。深色主題的前提（ADR-0022）沒變，只是多疊一層圖。
+   圖寬撐滿頁寬、高度照原比例（不裁切），從頁面頂端開始、跟著內容一起捲動；
+   頁面比圖長時往下重複接一張（repeat-y），不留黑底。 */
+body { position: relative; }
+body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: url("/static/local/background.webp") top center / 100% auto repeat-y;
+  opacity: var(--bg-image-opacity);
+  pointer-events: none;
 }
 
 a {

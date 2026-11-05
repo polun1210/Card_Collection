@@ -10,3 +10,6 @@ data/logs/
 *.db-wal
 *.db-shm
 .worktrees/
+
+# 個人背景圖（有版權的美術圖，不進公開 repo）
+src/card_collection/static/local/
