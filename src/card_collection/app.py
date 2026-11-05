@@ -50,6 +50,17 @@ class RevalidatingStaticFiles(StaticFiles):
         return response
 
 
+def static_url(path: str) -> str:
+    """樣板用的靜態檔網址，後面帶檔案修改時間當版本號。
+
+    在 no-cache 生效之前就存進瀏覽器的舊樣式表，不會回頭問伺服器；網址一變，舊快取就
+    對不上、只能重抓。之後每改一次檔案版本號就跟著變。每次渲染即時 stat，改完存檔
+    重新整理就生效，不必重啟伺服器。
+    """
+    version = (STATIC_DIR / path).stat().st_mtime_ns
+    return f"/static/{path}?v={version}"
+
+
 def create_app(
     csv_path: Path,
     db_path: Path,
@@ -90,6 +101,7 @@ def create_app(
 
     app = FastAPI(title="Card Collection", lifespan=lifespan)
     app.state.templates = Jinja2Templates(directory=TEMPLATES_DIR)
+    app.state.templates.env.globals["static_url"] = static_url
     app.mount("/static", RevalidatingStaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(router)
 

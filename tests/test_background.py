@@ -52,3 +52,17 @@ def test_靜態檔每次都向伺服器確認新舊且保留etag(client):
         "/static/design.css", headers={"If-None-Match": response.headers["etag"]}
     )
     assert revalidated.status_code == 304
+
+
+def test_三頁的樣式表網址都帶版本號讓瀏覽器丟掉舊快取(client):
+    # 舊快取裡的 design.css 沒有 no-cache，瀏覽器會繼續拿它而不來問；網址變了才會重抓。
+    for path in ("/", "/holdings", "/queue"):
+        # Act
+        html = client.get(path).text
+
+        # Assert
+        hrefs = re.findall(r'<link rel="stylesheet" href="([^"]+)"', html)
+        assert hrefs, path
+        for href in hrefs:
+            assert re.fullmatch(r"/static/[\w.]+\.css\?v=\d+", href), (path, href)
+            assert client.get(href).status_code == 200, href
