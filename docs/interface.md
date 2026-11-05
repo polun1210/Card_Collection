@@ -280,6 +280,18 @@ assert "detailOf" in page
 
 ---
 
+### 7.6 頁面背景圖（個人檔案，不進 git）
+
+三頁共用一張半透明背景圖，疊在 `body` 的深色底之上、內容之下（`design.css` 的
+`body::before`）。
+
+- 圖檔放在 `src/card_collection/static/local/background.webp`，該目錄已列入
+  `.gitignore`：這是有版權的美術圖，本 repo 是公開的，**不要 commit**。
+- 透明度是 `design.css` 的 `--bg-image-opacity`（目前 `.5`），要調淡調濃改這一個值。
+- 圖檔不存在時（例如別人 clone 這個 repo）`url()` 載入失敗、什麼都不畫，頁面照常是深色底。
+- ADR-0022 的深色主題前提沒變，只是多疊了一層圖。換圖直接覆蓋同名檔案；換成別的格式
+  要同步改 `design.css` 的副檔名。
+
 ## 8. 資料從哪裡來
 
 畫面上的每個數字都是伺服器算好的，前端**不重算任何金額**。
