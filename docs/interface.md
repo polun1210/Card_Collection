@@ -18,7 +18,7 @@
     裝了才會生效，否則落到 `system-ui`。要用指定字型就得決定「要不要為此引入外部
     資源」，那是一個要明講的取捨。
 - **JS 只做三件事**：走勢圖繪製與 hover、更新行情的按鈕、持有品增刪改的對話框，
-  外加卡片展開時抓動能。**其餘畫面在沒有 JS 的情況下就是完整的**——分頁切換用的是
+  外加卡片展開時抓動能，以及抽屜卡圖的傾斜與反光（手寫，ADR-0024）。**其餘畫面在沒有 JS 的情況下就是完整的**——分頁切換用的是
   `radio + :checked`，不等腳本。這個性質值得保留。
 - 版面寬度：首頁與持有品頁 `max-width: 78rem`，卡種對應頁 `72rem`。
 
@@ -276,6 +276,117 @@ assert "detailOf" in page
 如 §3 所述這是刻意的。但 `.totals`、`.freshness`、`.toolbar`、`button` 等區塊在
 `portfolio.html` 與 `holdings.html` 幾乎逐字相同。若這個階段要建立設計 token，
 這幾塊是最明顯的起點。
+
+---
+
+### 7.5 卡牌立體特效（傾斜＋反光）— 已實作（選 A，手寫），見 ADR-0024
+
+起點是這個 repo：<https://github.com/simeydotme/pokemon-cards-css>（GPL-3.0，8.2k star，
+CSS-Tricks 上那篇 holographic trading card effect 的出處）。作者在 README 置頂自薦了一個
+輕量版：<https://github.com/simeydotme/hover-tilt>（MIT）。
+
+以下是 2026-09-13 讀過兩邊原始碼之後的盤點（歷史紀錄）。**後來實作時改為手寫，見 ADR-0024。**
+
+#### 能用的是「傾斜＋反光」，不是「彩虹 holo」
+
+那個特效是分層疊出來的，而**兩層的可用性天差地遠**：
+
+```
+.card                     ← 3D 透視容器（perspective: 600px）
+ └ .card__translater      ← 位移＋縮放
+    └ .card__rotator      ← rotateX / rotateY ── 滑鼠帶動的傾斜
+       ├ img              ← 卡面圖
+       ├ .card__shine     ← 彩虹 holo 層 ✗ 本專案用不了
+       └ .card__glare     ← 反光層       ✓ 可以用
+                             ↑ 兩層都靠 CSS 變數驅動：
+                               --pointer-x/y、--pointer-from-center、
+                               --rotate-x/y、--background-x/y、
+                               --card-scale、--card-opacity
+```
+
+`glare`（反光）是一個跟著游標跑的放射狀白光 ＋ `mix-blend-mode: overlay`，**不挑卡**。
+`shine`（彩虹 holo）是重複線性漸層 × 材質圖 × blend-mode × `clip-path`，**很挑卡**。
+
+**四個理由讓 `shine` 在本專案用不了：**
+
+1. **沒有稀有度資料，而且是刻意沒有。** 那 20 幾支 rarity CSS 是靠 `data-rarity="rare holo"`、
+   `data-subtypes` 這些屬性派送的。但 `CONTEXT.md` 明文「不區分鑑定公司、不區分分數」，
+   **稀有度還列在 `_Avoid_` 清單**（rarity 在寶可夢卡指卡面印刷的稀有度符號，與本系統的
+   流動性概念無關）。`card` 表只有 `series_raw` / `number_raw` / `card_code` / `name_en` /
+   `name_ja`，沒有 rarity 欄位。派不出去。
+2. **`clip-path` 寫死官方卡框幾何。** `--clip: inset(9.85% 8% 52.85% 8%)` 指的是「標準卡框的
+   圖框視窗」。我們的圖是 SNKRDUNK 商品照裁切過的，裁切幅度不一致（§7.2 的
+   `744296.webp` 比例 1.095 就是異常值）。對不準就是一塊歪掉的色帶。
+3. **卡圖是實拍，holo 已經烙在照片裡。** `91147.webp`（リザードン V SR）照片上的彩虹紋路
+   是拍出來的。再疊一層合成彩虹＝雙重 holo。
+4. **效能。** 62 格 × 5 層，每層帶
+   `will-change: transform, opacity, background-image, background-size, background-position,
+   background-blend-mode, filter`。§5 第 10 條說手機是主要的唯讀場景。
+
+**一個值得記下的巧合**：那份 CSS 的 `--card-aspect: 0.718`，與 §7.1 實測 69 張卡圖的中位比例
+`0.718`、以及最後採用的 `63/88`（0.716）幾乎完全一致。它本來就是照實體卡比例寫的。
+
+> 實作時的補充（ADR-0024）：使用者看過樣品後選了「整卡彩虹光帶，但淡一點」。它與 shine 不同，
+> 所有卡套同一種光帶，不需要稀有度資料；理由 3 的雙重 holo 疑慮使用者看過後接受，透明度降到 .3 減輕之。
+
+#### 兩個候選做法
+
+| | **A. 只用在卡片明細抽屜** | **B. 卡圖牆 62 格也上** |
+|---|---|---|
+| 範圍 | 一次一張大卡（`_portfolio_wall.html` 的 `.drawer__art`） | 每一格 `.wall .art` |
+| 效能風險 | 無。同時只有一張在動 | 高。要節流（只對 hover 中那格啟用）、要實測手機 |
+| 動機是否對得上 | 對。抽屜本來就是「仔細看這張卡」的場景 | 牆的任務是「用認圖的方式找卡」，特效反而干擾掃視 |
+| 工作量 | 小 | 中，且有效能風險要先實測 |
+| 對 §5 約束的影響 | 無 | 無（特效不改任何數字），但捲動流暢度是體感風險 |
+
+還有第三條路留著：**不引入任何檔案，自己移植 `base.css` 的 glare 那段 ＋ 約 40 行 vanilla JS。**
+好處是零依賴、沒有授權問題；代價是彈簧物理（spring）的手感要自己調，不會像原版那麼順。
+
+#### 決定：暫定 A
+
+理由是**先用最小的代價看到效果**。A 做完之後如果覺得值得，再決定要不要往牆上推；
+**B 不該在沒看過 A 的實際效果之前就做**——它的成本幾乎全在效能調校上，而那筆成本只有在
+「已經確定這個特效值得」之後才划算。
+
+什麼情況下才該重新考慮 B：A 上線後實際用了一陣子，**而且**在手機上實測 62 格同時掛載
+特效的捲動幀數可以接受。
+
+#### 用 hover-tilt 而不是 pokemon-cards-css
+
+> 已改為手寫，見 ADR-0024（動工前發現 npm 標 MPL-2.0、GitHub 標 MIT，授權不一致，且 bundle 內含 Svelte runtime）。
+
+| | pokemon-cards-css | **hover-tilt** |
+|---|---|---|
+| 授權 | GPL-3.0（傳染性 copyleft） | **MIT** |
+| 形式 | Svelte 專案 ＋ 27 張材質圖 ≈ 4.4 MB | **Web Component**，`dist/hover-tilt.js` 單檔 180,717 bytes |
+| 建置步驟 | 要 Vite | **不用**，`<script type="module">` 就跑 |
+| 前端框架 | Svelte | **原始碼裡沒有**（Svelte runtime 已編進那支檔案） |
+| 稀有度資料 | 必要 | 不需要 |
+
+介面（v1.0.0）：`<hover-tilt tilt-factor="1.5" scale-factor="1.05" glare-intensity="0.8">`，
+屬性用 kebab-case，對外露出 `--hover-tilt-opacity` / `--hover-tilt-rotation-x/y` 等 CSS 變數，
+內部可用 `::part(container)` / `::part(tilt)` 調整。
+
+#### 實作前必須先處理的四件事
+
+1. **這會動到 §1 的兩條明文性質**，所以**要補一張 ADR**，不要順手做掉：
+   - 「零外部資源」——把 `hover-tilt.js` 抓下來放進 `src/card_collection/static/` 就守得住
+     （跟 `design.css` 一樣是本機檔案，npm 或任何 CDN 掛掉都不影響）。要在 ADR 裡明講
+     這條規矩的意思是「**執行期不依賴外部網站**」而不是「不准用別人的程式碼」。
+   - 「沒有前端框架」——那支檔案裡面**包著一份 Svelte runtime**。原始碼裡看不到框架，
+     但它確實在 bundle 裡。這是取捨，要寫明白，不要假裝沒這回事。
+2. **`prefers-reduced-motion`** 要處理。
+3. **`.art` 目前是 `object-fit: contain` ＋ 深色底**（§7.1 的決定）。卡圖四周有留白時，
+   傾斜與反光會作用在「圖片元素」而不是「卡的形狀」上，看起來會怪。要先確認反光層是
+   貼著卡面還是貼著容器。
+4. **測試**：這個改動不碰任何數字，§6 第一層的紅線一條都不會動到。頂多動到第二層
+   （CSS 類別名）。
+
+#### 不要走的路
+
+- 不要為了讓 `shine` 能用而去補一個 rarity 欄位。那會把 `CONTEXT.md` 明文排除的概念
+  請回系統裡，代價遠大於視覺收穫。
+- 不要用 CDN 載 `hover-tilt`。§1 那條規矩的存在理由就是這個。
 
 ---
 

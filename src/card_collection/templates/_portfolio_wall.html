@@ -54,7 +54,13 @@
            → 前往持有品。市值與樣本形狀永遠相鄰；流動性兩個半邊永遠並列。 #}
         <template class="cell__detail">
           {% if cell.apparel_id %}
-          <img class="drawer__art" src="/api/cards/{{ cell.apparel_id }}/image" alt="">
+          <div class="tilt">
+            <div class="tilt__card">
+              <img class="drawer__art" src="/api/cards/{{ cell.apparel_id }}/image" alt="">
+              <div class="tilt__sheen"></div>
+              <div class="tilt__glare"></div>
+            </div>
+          </div>
           {% else %}
           <div class="drawer__art drawer__art--empty"></div>
           {% endif %}
@@ -158,7 +164,13 @@
            流動性。每一筆是「購入資訊 → 售出資訊」的完整生命週期，不拆成兩張表。 #}
         <template class="cell__detail">
           {% if cell.apparel_id %}
-          <img class="drawer__art" src="/api/cards/{{ cell.apparel_id }}/image" alt="">
+          <div class="tilt">
+            <div class="tilt__card">
+              <img class="drawer__art" src="/api/cards/{{ cell.apparel_id }}/image" alt="">
+              <div class="tilt__sheen"></div>
+              <div class="tilt__glare"></div>
+            </div>
+          </div>
           {% else %}
           <div class="drawer__art drawer__art--empty"></div>
           {% endif %}
@@ -270,6 +282,47 @@
         + '<span class="drawer__why">近 30 天 ' + momentum.recent_count
         + " 筆成交／前 30 天 " + momentum.previous_count + " 筆</span>";
     }
+
+    // 卡圖傾斜與反光（ADR-0024）。抽屜內容是開啟時才 clone 進來的，所以事件掛在
+    // 不會被換掉的 #card-drawer-body 上做委派。沒有 JS 時卡圖照常顯示，只是不會動。
+    const MAX_TILT_DEG = 14;
+    const TILT_SCALE = 1.04;
+
+    function tiltTarget(event) {
+      const wrap = event.target.closest(".tilt");
+      return wrap && { wrap, card: wrap.querySelector(".tilt__card") };
+    }
+
+    function tiltMove(event) {
+      const hit = tiltTarget(event);
+      if (!hit) return;
+      const rect = hit.card.getBoundingClientRect();
+      const px = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+      const py = Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1);
+      const style = hit.card.style;
+      hit.wrap.classList.add("active");
+      style.setProperty("--ry", (px - 0.5) * 2 * MAX_TILT_DEG + "deg");
+      style.setProperty("--rx", -(py - 0.5) * 2 * MAX_TILT_DEG + "deg");
+      style.setProperty("--s", TILT_SCALE);
+      style.setProperty("--sx", 20 + px * 60 + "%");
+      style.setProperty("--sy", 20 + py * 60 + "%");
+      style.setProperty("--gx", px * 100 + "%");
+      style.setProperty("--gy", py * 100 + "%");
+      style.setProperty("--go", 1);
+    }
+
+    function tiltReset(event) {
+      const hit = tiltTarget(event);
+      // pointerout 會在 .tilt 內部的子元素之間冒泡；游標還在同一張卡內就不重設。
+      if (!hit || hit.wrap.contains(event.relatedTarget)) return;
+      hit.wrap.classList.remove("active");
+      for (const name of ["--rx", "--ry", "--s"]) hit.card.style.removeProperty(name);
+      hit.card.style.setProperty("--go", 0);
+    }
+
+    body.addEventListener("pointermove", tiltMove);
+    body.addEventListener("pointerout", tiltReset);
+    body.addEventListener("pointerup", tiltReset);
 
     for (const button of document.querySelectorAll(".wall .cell__open")) {
       button.addEventListener("click", () => openDrawer(button));
