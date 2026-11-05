@@ -35,6 +35,21 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+class RevalidatingStaticFiles(StaticFiles):
+    """每次使用前都先向伺服器確認新舊。
+
+    StaticFiles 只給 etag／last-modified、沒有 Cache-Control，瀏覽器會用猜測式快取
+    （heuristic freshness）直接拿舊檔、連問都不問。這是個人本機工具，改了樣式或換了
+    背景圖，一般重新整理就該看到新版。`no-cache` 是「可以快取，但用之前要先問」，
+    搭配 etag 沒變動時回 304，成本很低；不用 `no-store`。
+    """
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def create_app(
     csv_path: Path,
     db_path: Path,
@@ -75,7 +90,7 @@ def create_app(
 
     app = FastAPI(title="Card Collection", lifespan=lifespan)
     app.state.templates = Jinja2Templates(directory=TEMPLATES_DIR)
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount("/static", RevalidatingStaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(router)
 
     @app.exception_handler(CardImageError)

@@ -37,3 +37,18 @@ def test_webp靜態檔以圖片類型提供(client):
 
     # Assert
     assert guessed == "image/webp"
+
+
+def test_靜態檔每次都向伺服器確認新舊且保留etag(client):
+    # Act
+    response = client.get("/static/design.css")
+
+    # Assert：no-cache 不是 no-store——可以快取，但用之前要先問；etag 讓沒變動時回 304
+    assert response.status_code == 200
+    assert "no-cache" in response.headers["cache-control"]
+    assert "no-store" not in response.headers["cache-control"]
+    assert response.headers["etag"]
+    revalidated = client.get(
+        "/static/design.css", headers={"If-None-Match": response.headers["etag"]}
+    )
+    assert revalidated.status_code == 304
