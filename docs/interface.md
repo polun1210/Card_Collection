@@ -400,8 +400,16 @@ CSS-Tricks 上那篇 holographic trading card effect 的出處）。作者在 RE
   `.gitignore`：這是有版權的美術圖，本 repo 是公開的，**不要 commit**。
 - 透明度是 `design.css` 的 `--bg-image-opacity`（目前 `.4`），要調淡調濃改這一個值。
 - 圖檔不存在時（例如別人 clone 這個 repo）`url()` 載入失敗、什麼都不畫，頁面照常是深色底。
-- ADR-0022 的深色主題前提沒變，只是多疊了一層圖。換圖直接覆蓋同名檔案；換成別的格式
-  要同步改 `design.css` 的副檔名。
+- ADR-0022 的深色主題前提沒變，只是多疊了一層圖。
+- 圖寬撐滿頁寬、高度照原比例，從頁面頂端開始隨內容捲動，往下以 `repeat-y` 重複接續。
+- **換圖要跑前處理腳本**，不要直接覆蓋檔案：
+
+  ```
+  uv run python scripts/prepare_background.py C:\path\to\image.png
+  ```
+
+  它會裁掉四周黑邊（放大後兩張接起來會變一條粗黑線）、把上下邊緣各 8% 淡成頁面底色
+  （交界才不會硬切），再存成 webp。腳本裡的底色必須與 `--bg-app` 一致，有測試守著。
 
 ---
 
