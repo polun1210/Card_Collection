@@ -95,13 +95,16 @@ body {
 }
 
 /* 背景圖疊在 body 深色底之上、內容之下。圖檔不存在時 url() 載入失敗，什麼都不畫，
-   頁面照常是深色底。深色主題的前提（ADR-0022）沒變，只是多疊一層圖。 */
+   頁面照常是深色底。深色主題的前提（ADR-0022）沒變，只是多疊一層圖。
+   圖寬撐滿頁寬、高度照原比例（不裁切），從頁面頂端開始、跟著內容一起捲動；
+   頁面比圖長時，圖以下就是原本的深色底。 */
+body { position: relative; }
 body::before {
   content: "";
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: -1;
-  background: url("/static/local/background.webp") center / cover no-repeat;
+  background: url("/static/local/background.webp") top center / 100% auto no-repeat;
   opacity: var(--bg-image-opacity);
   pointer-events: none;
 }
