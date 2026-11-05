@@ -18,7 +18,7 @@
     裝了才會生效，否則落到 `system-ui`。要用指定字型就得決定「要不要為此引入外部
     資源」，那是一個要明講的取捨。
 - **JS 只做三件事**：走勢圖繪製與 hover、更新行情的按鈕、持有品增刪改的對話框，
-  外加卡片展開時抓動能。**其餘畫面在沒有 JS 的情況下就是完整的**——分頁切換用的是
+  外加卡片展開時抓動能，以及抽屜卡圖的傾斜與反光（手寫，ADR-0024）。**其餘畫面在沒有 JS 的情況下就是完整的**——分頁切換用的是
   `radio + :checked`，不等腳本。這個性質值得保留。
 - 版面寬度：首頁與持有品頁 `max-width: 78rem`，卡種對應頁 `72rem`。
 
@@ -279,13 +279,13 @@ assert "detailOf" in page
 
 ---
 
-### 7.5 卡牌立體特效（傾斜＋反光）— 選項已盤過，暫定選 A，尚未實作
+### 7.5 卡牌立體特效（傾斜＋反光）— 已實作（選 A，手寫），見 ADR-0024
 
 起點是這個 repo：<https://github.com/simeydotme/pokemon-cards-css>（GPL-3.0，8.2k star，
 CSS-Tricks 上那篇 holographic trading card effect 的出處）。作者在 README 置頂自薦了一個
 輕量版：<https://github.com/simeydotme/hover-tilt>（MIT）。
 
-以下是 2026-09-13 讀過兩邊原始碼之後的盤點。**還沒動工，沒有任何一行進 codebase。**
+以下是 2026-09-13 讀過兩邊原始碼之後的盤點（歷史紀錄）。**後來實作時改為手寫，見 ADR-0024。**
 
 #### 能用的是「傾斜＋反光」，不是「彩虹 holo」
 
@@ -349,6 +349,8 @@ CSS-Tricks 上那篇 holographic trading card effect 的出處）。作者在 RE
 特效的捲動幀數可以接受。
 
 #### 用 hover-tilt 而不是 pokemon-cards-css
+
+> 已改為手寫，見 ADR-0024（動工前發現 npm 標 MPL-2.0、GitHub 標 MIT，授權不一致，且 bundle 內含 Svelte runtime）。
 
 | | pokemon-cards-css | **hover-tilt** |
 |---|---|---|
