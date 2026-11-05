@@ -25,3 +25,15 @@ def test_背景圖檔不存在時樣式表與頁面照常回應(client):
     assert css.status_code == 200
     assert page.status_code == 200
     assert re.search(r"body\s*\{[^}]*background:\s*var\(--bg-app\)", css.text)
+
+
+def test_webp靜態檔以圖片類型提供(client):
+    # Arrange：app 已被 import（client fixture）。不依賴 static/local/ 的背景圖，
+    # 它被 gitignore，測試環境不一定有。StaticFiles 就是靠 mimetypes 猜 Content-Type。
+    import mimetypes
+
+    # Act
+    guessed, _ = mimetypes.guess_type("/static/local/background.webp")
+
+    # Assert
+    assert guessed == "image/webp"

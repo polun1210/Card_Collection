@@ -4,6 +4,7 @@
 **web 服務專屬的啟動儀式**：卡種列的 seed 與持有品的一次性匯入。
 """
 
+import mimetypes
 import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -23,6 +24,10 @@ from .images import CardImageError
 from .notion_csv import read_card_kinds
 from .services import build_services
 from .snkrdunk import DEFAULT_REQUEST_INTERVAL_SECONDS, SnkrdunkError
+
+# Windows 上 Python 的 mimetypes 不認得 .webp，StaticFiles 會回 application/octet-stream；
+# Chrome 會自己嗅探，Safari 不保證。在建立 StaticFiles 之前先註冊。
+mimetypes.add_type("image/webp", ".webp")
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 # 三頁的樣式從樣板的 inline <style> 移出後住在這裡（ADR-0023）。掛的是本機檔案，
