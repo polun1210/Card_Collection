@@ -27,24 +27,18 @@
 .readout { display: flex; flex-wrap: wrap; gap: .2rem 1.4rem; margin: .7rem 0 .3rem; font-size: 14px; font-variant-numeric: tabular-nums; }
 .readout .day { font-weight: 600; }
 .readout em { font-style: normal; color: var(--text-muted); margin-right: .35rem; }
-/* 圖表用標籤自我說明，取代舊版圖下方的教學段落（spec §7.3）。 */
-.trend-legend { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; margin: .45rem 0 0; padding: 0;
-                font-size: 12px; color: var(--text-muted); list-style: none; }
+/* 走勢圖是單線面積圖（ADR-0025）。線色是頁面層變數，刻意不用 --positive／--negative：
+   這條線講「總市值多少」，不是「賺賠」。 */
+:root { --trend-line: #1FA99A; }
 #trend-chart { display: block; width: 100%; touch-action: none; }
+#trend-fill stop { stop-color: var(--trend-line); }
+#trend-chart .grid { stroke: var(--border-strong); stroke-dasharray: 1 4; stroke-linecap: round; }
 #trend-chart .axis { stroke: var(--border-strong); }
 #trend-chart .tick { fill: var(--text-muted); font-size: 11px; }
-#trend-chart .gap { fill: url(#trend-hatch); }
-#trend-chart .covered { fill: var(--text-muted); }
-#trend-chart .band { fill: rgba(160, 174, 192, .08); }
-#trend-chart .cost { fill: none; stroke: var(--text-muted); stroke-width: 1.5; }
-/* 市值線：中性色（spec §7.3、#31）。舊版沿用重做前的獲利綠，改回中性——這條線講
-   「總市值多少」，不是「賺賠」。 */
-#trend-chart .value { fill: none; stroke: var(--text-primary); stroke-width: 2; stroke-linejoin: round; }
-#trend-chart .value.partial { stroke-dasharray: 5 3; }
+#trend-chart .area { fill: url(#trend-fill); }
+#trend-chart .value { fill: none; stroke: var(--trend-line); stroke-width: 2; stroke-linejoin: round; }
 #trend-chart .guide { stroke: var(--text-muted); }
-#trend-chart .value-dot { fill: var(--text-primary); }
-#trend-chart .cost-dot { fill: var(--text-muted); }
-#trend-hatch line { stroke: var(--text-muted); stroke-width: 1; }
+#trend-chart .value-dot { fill: var(--trend-line); }
 .trend-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-control); padding: 1.6rem 1.2rem; margin: .7rem 0 0; color: var(--text-muted); font-size: 14px; text-align: center; }
 
 /* --- 持有摘要（Hero 右半）。只講持有中的部位——已實現損益與已售出張數不在這裡

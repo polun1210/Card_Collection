@@ -1,7 +1,7 @@
 {# 收藏總覽的 Hero（#31）：資產走勢與持有摘要合成一整片（spec §7.3）。
 
-   桌機約 7:3：左邊資產走勢（區間鈕、總市值曲線、總成本階梯線、涵蓋率量尺、
-   hover 讀數），右邊只講**持有中**的部位。已實現損益與已售出張數不出現在這裡。
+   桌機約 7:3：左邊資產走勢（區間鈕、單條總市值面積圖、hover 讀數；ADR-0025 拿掉了
+   成本線與涵蓋率量尺，資料 API 仍保留涵蓋率），右邊只講**持有中**的部位。已實現損益與已售出張數不出現在這裡。
    手機上摘要排在走勢圖之前（spec §11.2）——所以 DOM 先摘要、後走勢，桌機再用
    CSS 的 row-reverse 把摘要挪到右側。
 
@@ -80,22 +80,16 @@
       <span class="day" id="trend-day">{{ trend[-1].date }}</span>
       <span><em>總市值</em><b id="trend-value">{{ "{:,}".format(trend[-1].market_value_twd) }}</b></span>
       <span><em>總成本</em><b id="trend-cost">{{ "{:,}".format(trend[-1].cost_twd) }}</b></span>
-      <span><em>涵蓋率</em><b id="trend-coverage">{{ trend[-1].valued_kind_count }} / {{ trend[-1].held_kind_count }}</b></span>
     </p>
-    <svg id="trend-chart" role="img" aria-label="總市值曲線與總成本階梯線，橫軸下方附涵蓋率量尺">
+    <svg id="trend-chart" role="img" aria-label="總市值走勢面積圖，縱軸為市值、橫軸為日期，滑過可看各日總市值與總成本">
       <defs>
-        <pattern id="trend-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="7"/>
-        </pattern>
+        <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-opacity=".55"/>
+          <stop offset="1" stop-opacity="0"/>
+        </linearGradient>
       </defs>
       <g id="trend-layer"></g>
     </svg>
-    {# 圖表用標籤自我說明，不再放教學段落（spec §7.3）。 #}
-    <ul class="trend-legend">
-      <li>實線 ── 總市值</li>
-      <li>階梯線 ── 總成本</li>
-      <li>虛線與斜線區 ── 當天有持有卡種算不出市值</li>
-    </ul>
     {% else %}
     <div class="trend-empty">
       還沒有成交紀錄可以估價，畫不出曲線。按頁首的「更新行情」抓一輪回來就畫得出來了。
@@ -114,26 +108,21 @@
     const svg = document.getElementById("trend-chart");
     const layer = document.getElementById("trend-layer");
     const SVG_NS = "http://www.w3.org/2000/svg";
-    const PAD = { top: 14, right: 10, bottom: 44, left: 56 };
-    // 底部那條涵蓋率量尺的高度。它與曲線同一個橫軸，看得出低涵蓋率落在哪一段。
-    const METER = 12;
+    const PAD = { top: 14, right: 10, bottom: 30, left: 56 };
+    const GRID_LINES = 4;
+    const LABEL_COUNT = 5;
     const number = new Intl.NumberFormat("zh-TW");
     const readout = {
       day: document.getElementById("trend-day"),
       value: document.getElementById("trend-value"),
       cost: document.getElementById("trend-cost"),
-      coverage: document.getElementById("trend-coverage"),
     };
     let shown = TREND_POINTS;
     let scale = null;
     let guide = null;
 
-    // 涵蓋率足額＝當天每一個持有卡種都算得出市值。門檻不自己發明一個百分比，
-    // 「有卡種算不出來」與「全部都算得出來」本來就是兩件事。
-    const isFull = (point) => point.valued_kind_count === point.held_kind_count;
-    const compact = (value) =>
-      value >= 10000 ? (value / 10000).toFixed(value >= 1000000 ? 0 : 1) + "萬" : number.format(value);
-    const dayLabel = (iso) => iso.slice(5).replace("-", "/");
+    // 月/日，不補零（9/11）。
+    const dayLabel = (iso) => Number(iso.slice(5, 7)) + "/" + Number(iso.slice(8, 10));
 
     function node(name, attributes, className) {
       const element = document.createElementNS(SVG_NS, name);
@@ -152,11 +141,31 @@
       return TREND_POINTS.slice(-Number(range));
     }
 
+    // 取 1、2、5 × 10^n 中不小於 raw 的整齊間距。
+    function niceStep(raw) {
+      const power = Math.pow(10, Math.floor(Math.log10(raw)));
+      for (const unit of [1, 2, 5, 10]) if (unit * power >= raw) return unit * power;
+      return 10 * power;
+    }
+
+    // 縱軸不從 0 起算：取資料最小到最大，格線落在整齊的數字上（ADR-0025）。
+    function axisFor(values) {
+      const low = Math.min(...values);
+      const high = Math.max(...values);
+      let step = niceStep(Math.max(high - low, 3) / (GRID_LINES - 1.5));
+      for (;;) {
+        const start = Math.floor(low / step) * step;
+        if (start + step * (GRID_LINES - 1) >= high) {
+          return Array.from({ length: GRID_LINES }, (_, i) => start + step * i);
+        }
+        step = niceStep(step * 1.01);
+      }
+    }
+
     function show(point) {
       readout.day.textContent = point.date;
       readout.value.textContent = number.format(point.market_value_twd);
       readout.cost.textContent = number.format(point.cost_twd);
-      readout.coverage.textContent = point.valued_kind_count + " / " + point.held_kind_count;
     }
 
     function draw() {
@@ -171,78 +180,39 @@
       const bottom = height - PAD.bottom;
       const left = PAD.left;
       const right = width - PAD.right;
-      const highest = Math.max(
-        1,
-        ...shown.map((point) => Math.max(point.market_value_twd, point.cost_twd))
-      );
-      // 縱軸自 0 起算，兩線之間的空隙才與未實現損益成比例。
-      const ceiling = highest * 1.08;
+      const ticks = axisFor(shown.map((point) => point.market_value_twd));
+      const floor = ticks[0];
+      const ceiling = ticks[ticks.length - 1];
       const x = (index) => (last === 0 ? (left + right) / 2 : left + ((right - left) * index) / last);
-      const y = (value) => bottom - ((bottom - top) * value) / ceiling;
+      const y = (value) => bottom - ((bottom - top) * (value - floor)) / (ceiling - floor);
       scale = { x, y, left, right, top, bottom, width };
 
-      // 涵蓋率量尺：斜線＝當天算不出市值的那部分卡種，實色＝算得出的那部分。
-      // 這是曲線的分母，所以它跟曲線共用橫軸——低涵蓋率落在哪一段，一眼看得出來。
-      const meterTop = bottom + 8;
-      const meterBase = meterTop + METER;
-      const covered = (index) => {
-        const point = shown[index];
-        if (!point.held_kind_count) return meterBase;
-        return meterBase - (METER * point.valued_kind_count) / point.held_kind_count;
-      };
-      // 一張卡都沒持有的日子留白：那幾天沒有分母，說 0% 或 100% 都不對。
-      for (let start = 0; start <= last; start++) {
-        if (!shown[start].held_kind_count) continue;
-        let end = start;
-        while (end < last && shown[end + 1].held_kind_count) end += 1;
-        node("rect", { x: x(start), y: meterTop, width: Math.max(1.5, x(end) - x(start)), height: METER }, "gap");
-        start = end;
-      }
-      let meter = "M " + x(0) + " " + covered(0);
-      for (let i = 1; i <= last; i++) meter += " H " + x(i) + " V " + covered(i);
-      node("path", { d: meter + " V " + meterBase + " H " + x(0) + " Z" }, "covered");
-      node("text", { x: left - 8, y: meterBase, "text-anchor": "end" }, "tick").textContent = "涵蓋率";
-
-      for (const value of [0, highest / 2, highest]) {
-        node("line", { x1: left, y1: y(value), x2: right, y2: y(value) }, "axis");
+      for (const value of ticks) {
+        node("line", { x1: left, y1: y(value), x2: right, y2: y(value) }, "grid");
         node("text", { x: left - 8, y: y(value) + 4, "text-anchor": "end" }, "tick").textContent =
-          compact(Math.round(value));
+          number.format(value);
       }
 
-      // 成本線走階梯：值在購入日**當天**跳一階，所以先水平到那一天再垂直跳。
-      let cost = "M " + x(0) + " " + y(shown[0].cost_twd);
-      for (let i = 1; i <= last; i++) cost += " H " + x(i) + " V " + y(shown[i].cost_twd);
-
-      let band = "M " + x(0) + " " + y(shown[0].market_value_twd);
-      for (let i = 1; i <= last; i++) band += " L " + x(i) + " " + y(shown[i].market_value_twd);
-      band += " L " + x(last) + " " + y(shown[last].cost_twd);
-      for (let i = last; i > 0; i--) band += " H " + x(i - 1) + " V " + y(shown[i - 1].cost_twd);
-      node("path", { d: band + " Z" }, "band");
-      node("path", { d: cost }, "cost");
-
-      // 市值線依涵蓋率切段：足額的畫實線，不足的畫虛線。
-      const runs = [];
-      for (let i = 1; i <= last; i++) {
-        const full = isFull(shown[i - 1]) && isFull(shown[i]);
-        const current = runs[runs.length - 1];
-        if (current && current.full === full) current.to = i;
-        else runs.push({ full: full, from: i - 1, to: i });
-      }
-      for (const run of runs) {
-        let line = "M " + x(run.from) + " " + y(shown[run.from].market_value_twd);
-        for (let i = run.from + 1; i <= run.to; i++) line += " L " + x(i) + " " + y(shown[i].market_value_twd);
-        node("path", { d: line }, run.full ? "value" : "value partial");
-      }
+      let line = "M " + x(0) + " " + y(shown[0].market_value_twd);
+      for (let i = 1; i <= last; i++) line += " L " + x(i) + " " + y(shown[i].market_value_twd);
+      const area = line + " L " + x(last) + " " + bottom + " L " + x(0) + " " + bottom + " Z";
+      node("path", { d: area }, "area");
+      node("line", { x1: left, y1: bottom, x2: right, y2: bottom }, "axis");
+      node("path", { d: line }, "value");
       if (last === 0) node("circle", { cx: x(0), cy: y(shown[0].market_value_twd), r: 3 }, "value-dot");
 
-      node("text", { x: left, y: height - 6 }, "tick").textContent = dayLabel(shown[0].date);
-      node("text", { x: right, y: height - 6, "text-anchor": "end" }, "tick").textContent =
-        dayLabel(shown[last].date);
+      // 日期標籤平均分布；點數不足就有幾個點標幾個。
+      const labels = Math.min(LABEL_COUNT, shown.length);
+      for (let i = 0; i < labels; i++) {
+        const index = labels === 1 ? 0 : Math.round((i * last) / (labels - 1));
+        const anchor = i === 0 ? "start" : i === labels - 1 ? "end" : "middle";
+        node("text", { x: x(index), y: height - 8, "text-anchor": anchor }, "tick").textContent =
+          dayLabel(shown[index].date);
+      }
 
       guide = {
-        line: node("line", { x1: 0, y1: top, x2: 0, y2: meterBase }, "guide"),
+        line: node("line", { x1: 0, y1: top, x2: 0, y2: bottom }, "guide"),
         value: node("circle", { cx: 0, cy: 0, r: 3.5 }, "value-dot"),
-        cost: node("circle", { cx: 0, cy: 0, r: 3.5 }, "cost-dot"),
       };
       hideGuide();
     }
@@ -263,8 +233,6 @@
       guide.line.setAttribute("x2", scale.x(index));
       guide.value.setAttribute("cx", scale.x(index));
       guide.value.setAttribute("cy", scale.y(point.market_value_twd));
-      guide.cost.setAttribute("cx", scale.x(index));
-      guide.cost.setAttribute("cy", scale.y(point.cost_twd));
       for (const key in guide) guide[key].style.display = "";
       show(point);
     }
