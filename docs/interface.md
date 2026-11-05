@@ -398,7 +398,7 @@ CSS-Tricks 上那篇 holographic trading card effect 的出處）。作者在 RE
 
 - 圖檔放在 `src/card_collection/static/local/background.webp`，該目錄已列入
   `.gitignore`：這是有版權的美術圖，本 repo 是公開的，**不要 commit**。
-- 透明度是 `design.css` 的 `--bg-image-opacity`（目前 `.5`），要調淡調濃改這一個值。
+- 透明度是 `design.css` 的 `--bg-image-opacity`（目前 `.4`），要調淡調濃改這一個值。
 - 圖檔不存在時（例如別人 clone 這個 repo）`url()` 載入失敗、什麼都不畫，頁面照常是深色底。
 - ADR-0022 的深色主題前提沒變，只是多疊了一層圖。換圖直接覆蓋同名檔案；換成別的格式
   要同步改 `design.css` 的副檔名。
