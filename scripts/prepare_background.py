@@ -3,7 +3,7 @@
     uv run python scripts/prepare_background.py C:\\path\\to\\image.png
 
 輸出到 `src/card_collection/static/local/background.webp`（該目錄不進 git，見
-docs/interface.md §7.6）。只讀來源圖、只寫這一個輸出檔，不碰網路與資料庫。
+docs/interface.md §7.5）。只讀來源圖、只寫這一個輸出檔，不碰網路與資料庫。
 
 為什麼要前處理：背景圖以 `repeat-y` 往下重複（design.css 的 `body::before`），
 一張的底部會直接接上下一張的頂部。
